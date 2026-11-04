@@ -1,0 +1,2594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>DeliveryPro - Sistema de Gestión de Entregas</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+            },
+            darkbg: '#0f172a',
+            darkcard: '#1e293b'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Leaflet CSS & JS para Mapas en Vivo -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Chart.js para Dashboard -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Estilos personalizados para App Móvil y Web */
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    input, textarea, select {
+      user-select: auto;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.05);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(100,116,139,0.3);
+      border-radius: 4px;
+    }
+    .driver-pulse {
+      animation: pulse-ring 2s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+    #map-container {
+      height: 100%;
+      min-height: 400px;
+      width: 100%;
+      border-radius: 0.75rem;
+      z-index: 10;
+    }
+    .leaflet-popup-content-wrapper {
+      background: #1e293b;
+      color: #f8fafc;
+      border-radius: 0.75rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .leaflet-popup-tip {
+      background: #1e293b;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- ==================== TOP NAVIGATION BAR ==================== -->
+  <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <!-- Logo y Título -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+          <i data-lucide="truck" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="font-bold text-lg tracking-tight text-white flex items-center">
+              Delivery<span class="text-brand-500">Pro</span>
+            </h1>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              EN VIVO
+            </span>
+          </div>
+          <p id="header-business-name" class="text-xs text-slate-400 hidden sm:block">Gestión Integral de Envíos</p>
+        </div>
+      </div>
+
+      <!-- Selector de Modo: Admin vs Repartidor -->
+      <div class="flex items-center space-x-2 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+        <button id="btn-mode-admin" onclick="cambiarModo('admin')" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-brand-600 text-white shadow">
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          <span class="hidden md:inline">Administrador</span>
+        </button>
+        <button id="btn-mode-driver" onclick="cambiarModo('driver')" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all">
+          <i data-lucide="bike" class="w-4 h-4"></i>
+          <span class="hidden md:inline">Repartidor</span>
+        </button>
+      </div>
+
+      <!-- Botones de Acción Rápidos -->
+      <div class="flex items-center space-x-2">
+        <button onclick="recargarDatos()" title="Refrescar datos" class="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition">
+          <i data-lucide="refresh-cw" class="w-4 h-4" id="refresh-icon"></i>
+        </button>
+        <button onclick="abrirModalNuevoPedido()" class="flex items-center space-x-1.5 bg-gradient-to-r from-brand-600 to-emerald-600 hover:from-brand-500 hover:to-emerald-500 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-lg shadow-brand-500/20 transition-all">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Nuevo Pedido</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN CONTENT WRAPPER ==================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 pb-24 md:pb-6">
+
+    <!-- ============================================================== -->
+    <!-- MODO 1: ADMINISTRADOR / DESPACHADOR                            -->
+    <!-- ============================================================== -->
+    <div id="view-admin" class="space-y-6">
+
+      <!-- Navigation Tabs (Desktop & Tablet) -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <div class="flex space-x-1 sm:space-x-2 overflow-x-auto custom-scrollbar">
+          <button onclick="cambiarAdminTab('dashboard')" id="tab-btn-dashboard" class="admin-tab-btn active px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium flex items-center space-x-2 text-white bg-slate-800">
+            <i data-lucide="bar-chart-3" class="w-4 h-4 text-emerald-400"></i>
+            <span>Dashboard</span>
+          </button>
+          <button onclick="cambiarAdminTab('pedidos')" id="tab-btn-pedidos" class="admin-tab-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium flex items-center space-x-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+            <i data-lucide="package" class="w-4 h-4 text-blue-400"></i>
+            <span>Pedidos</span>
+            <span id="badge-pedidos-count" class="bg-blue-500/20 text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
+          </button>
+          <button onclick="cambiarAdminTab('mapa')" id="tab-btn-mapa" class="admin-tab-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium flex items-center space-x-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+            <i data-lucide="map-pin" class="w-4 h-4 text-amber-400"></i>
+            <span>Mapa en Vivo</span>
+          </button>
+          <button onclick="cambiarAdminTab('finanzas')" id="tab-btn-finanzas" class="admin-tab-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium flex items-center space-x-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+            <i data-lucide="wallet" class="w-4 h-4 text-purple-400"></i>
+            <span>Finanzas & Balances</span>
+          </button>
+          <button onclick="cambiarAdminTab('sucursales')" id="tab-btn-sucursales" class="admin-tab-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium flex items-center space-x-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+            <i data-lucide="store" class="w-4 h-4 text-teal-400"></i>
+            <span>Sucursales & Pagos</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 1: DASHBOARD ANALÍTICO -->
+      <div id="admin-sec-dashboard" class="space-y-6">
+        <!-- KPI Cards Grid -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <!-- Total Pedidos -->
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-slate-400">Total Pedidos</span>
+              <span class="p-2 rounded-xl bg-blue-500/10 text-blue-400">
+                <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+              </span>
+            </div>
+            <div class="mt-2 flex items-baseline space-x-2">
+              <span id="kpi-total-pedidos" class="text-2xl sm:text-3xl font-extrabold text-white">0</span>
+              <span id="kpi-pedidos-hoy" class="text-xs text-emerald-400 font-medium">0 en curso</span>
+            </div>
+          </div>
+
+          <!-- Tasa de Entregas -->
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-slate-400">Efectividad Entregas</span>
+              <span class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                <i data-lucide="check-circle" class="w-5 h-5"></i>
+              </span>
+            </div>
+            <div class="mt-2 flex items-baseline space-x-2">
+              <span id="kpi-tasa-efectividad" class="text-2xl sm:text-3xl font-extrabold text-white">0%</span>
+              <span id="kpi-entregados-count" class="text-xs text-slate-400">0 entregados</span>
+            </div>
+          </div>
+
+          <!-- Tiempo Promedio -->
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-slate-400">Tiempo Promedio</span>
+              <span class="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                <i data-lucide="clock" class="w-5 h-5"></i>
+              </span>
+            </div>
+            <div class="mt-2 flex items-baseline space-x-2">
+              <span id="kpi-tiempo-promedio" class="text-2xl sm:text-3xl font-extrabold text-white">0 min</span>
+              <span class="text-xs text-slate-400">por entrega</span>
+            </div>
+          </div>
+
+          <!-- Ingresos Totales -->
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-slate-400">Ingresos Totales</span>
+              <span class="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+                <i data-lucide="dollar-sign" class="w-5 h-5"></i>
+              </span>
+            </div>
+            <div class="mt-2 flex items-baseline space-x-2">
+              <span id="kpi-ingresos-totales" class="text-2xl sm:text-3xl font-extrabold text-white">$0.00</span>
+              <span id="kpi-envios-totales" class="text-xs text-emerald-400">$0 envíos</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Chart 1: Pedidos por Estado -->
+          <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-slate-200 flex items-center space-x-2">
+                <i data-lucide="pie-chart" class="w-4 h-4 text-emerald-400"></i>
+                <span>Estado de Pedidos</span>
+              </h3>
+            </div>
+            <div class="relative h-64 flex items-center justify-center">
+              <canvas id="chart-estados"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 2: Ventas por Método de Pago -->
+          <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-slate-200 flex items-center space-x-2">
+                <i data-lucide="credit-card" class="w-4 h-4 text-blue-400"></i>
+                <span>Ventas por Método de Pago</span>
+              </h3>
+            </div>
+            <div class="relative h-64 flex items-center justify-center">
+              <canvas id="chart-metodos"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 3: Ventas por Sucursal -->
+          <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5 lg:col-span-2">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-slate-200 flex items-center space-x-2">
+                <i data-lucide="building-2" class="w-4 h-4 text-amber-400"></i>
+                <span>Volumen de Ventas por Sucursal</span>
+              </h3>
+            </div>
+            <div class="relative h-64">
+              <canvas id="chart-sucursales"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ranking de Repartidores -->
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-slate-200 flex items-center space-x-2">
+              <i data-lucide="award" class="w-4 h-4 text-yellow-400"></i>
+              <span>Ranking y Rendimiento de Repartidores</span>
+            </h3>
+            <span class="text-xs text-slate-400">Entregas & Calificaciones</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs sm:text-sm">
+              <thead class="bg-slate-900/60 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th class="p-3 rounded-l-xl">Repartidor</th>
+                  <th class="p-3">Vehículo</th>
+                  <th class="p-3">Estado</th>
+                  <th class="p-3 text-center">Entregas</th>
+                  <th class="p-3 text-center">Calificación</th>
+                  <th class="p-3 text-right">Comisiones</th>
+                  <th class="p-3 rounded-r-xl text-right">Efectivo en Mano</th>
+                </tr>
+              </thead>
+              <tbody id="table-ranking-repartidores" class="divide-y divide-slate-700/40">
+                <!-- Se llena dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: GESTIÓN DE PEDIDOS -->
+      <div id="admin-sec-pedidos" class="space-y-4 hidden">
+        <!-- Barra de Filtros y Búsqueda -->
+        <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-4 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          <!-- Filtros de Estado -->
+          <div class="flex flex-wrap gap-1.5 sm:gap-2">
+            <button onclick="filtrarPedidosPorEstado('TODOS')" class="filter-btn active px-3 py-1.5 rounded-xl text-xs font-semibold bg-brand-600 text-white">Todos</button>
+            <button onclick="filtrarPedidosPorEstado('PENDIENTE')" class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-700/70 text-slate-300 hover:text-white">Pendientes</button>
+            <button onclick="filtrarPedidosPorEstado('ASIGNADO')" class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-700/70 text-slate-300 hover:text-white">Asignados</button>
+            <button onclick="filtrarPedidosPorEstado('EN_RUTA')" class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-700/70 text-slate-300 hover:text-white">En Ruta</button>
+            <button onclick="filtrarPedidosPorEstado('ENTREGADO')" class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-700/70 text-slate-300 hover:text-white">Entregados</button>
+            <button onclick="filtrarPedidosPorEstado('CANCELADO')" class="filter-btn px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-700/70 text-slate-300 hover:text-white">Cancelados</button>
+          </div>
+
+          <!-- Buscador y Vista Switch -->
+          <div class="flex items-center space-x-2">
+            <div class="relative flex-1 sm:w-64">
+              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-400"></i>
+              <input type="text" id="input-buscar-pedidos" oninput="buscarPedidos(this.value)" placeholder="Buscar cliente, tel, ID..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500">
+            </div>
+            <div class="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700">
+              <button onclick="cambiarVistaPedidos('cards')" id="btn-vista-cards" class="p-1.5 rounded-lg bg-slate-800 text-white" title="Vista Tarjetas">
+                <i data-lucide="grid" class="w-4 h-4"></i>
+              </button>
+              <button onclick="cambiarVistaPedidos('tabla')" id="btn-vista-tabla" class="p-1.5 rounded-lg text-slate-400 hover:text-white" title="Vista Tabla">
+                <i data-lucide="list" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista Tarjetas / Kanban de Pedidos -->
+        <div id="pedidos-container-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Renderizado dinámico -->
+        </div>
+
+        <!-- Vista Tabla de Pedidos -->
+        <div id="pedidos-container-tabla" class="hidden bg-slate-800/60 border border-slate-700/60 rounded-2xl overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs sm:text-sm">
+              <thead class="bg-slate-900 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th class="p-3">ID</th>
+                  <th class="p-3">Cliente & Contacto</th>
+                  <th class="p-3">Dirección & Sucursal</th>
+                  <th class="p-3">Detalle</th>
+                  <th class="p-3">Monto & Pago</th>
+                  <th class="p-3">Repartidor Asignado</th>
+                  <th class="p-3">Estado</th>
+                  <th class="p-3 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="table-pedidos-body" class="divide-y divide-slate-700/40">
+                <!-- Se llena dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: MAPA EN VIVO DE DELIVERIES -->
+      <div id="admin-sec-mapa" class="space-y-4 hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <!-- Mapa interactivo -->
+          <div class="lg:col-span-3 bg-slate-800/80 border border-slate-700/60 rounded-2xl p-3 sm:p-4 flex flex-col h-[650px] relative">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center space-x-2">
+                <div class="w-3 h-3 rounded-full bg-emerald-500 driver-pulse"></div>
+                <h3 class="text-sm font-semibold text-white">Monitoreo GPS en Tiempo Real</h3>
+              </div>
+              <div class="flex items-center space-x-2 text-xs">
+                <button onclick="centrarMapa()" class="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-300 hover:text-white flex items-center space-x-1">
+                  <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
+                  <span>Centrar</span>
+                </button>
+                <button onclick="toggleAutoGPS()" id="btn-toggle-autogps" class="px-2.5 py-1 rounded-lg bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1 font-medium">
+                  <i data-lucide="radio" class="w-3.5 h-3.5 animate-spin"></i>
+                  <span>Auto-Refresh: ON</span>
+                </button>
+              </div>
+            </div>
+            
+            <!-- Contenedor Leaflet Map -->
+            <div id="map-container" class="flex-1 w-full rounded-xl overflow-hidden border border-slate-700"></div>
+
+            <!-- Leyenda del mapa -->
+            <div class="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-400">
+              <span class="flex items-center space-x-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> <span>Repartidor Activo</span></span>
+              <span class="flex items-center space-x-1.5"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> <span>En Ruta con Pedido</span></span>
+              <span class="flex items-center space-x-1.5"><span class="w-3 h-3 rounded-full bg-slate-500 inline-block"></span> <span>Desconectado</span></span>
+              <span class="flex items-center space-x-1.5"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> <span>Pedido en Entrega</span></span>
+              <span class="flex items-center space-x-1.5"><span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span> <span>Sucursal</span></span>
+            </div>
+          </div>
+
+          <!-- Panel Lateral: Repartidores y Entregas Activas -->
+          <div class="space-y-4">
+            <!-- Repartidores en línea -->
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-4">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+                  <i data-lucide="users" class="w-4 h-4 text-brand-500"></i>
+                  <span>Repartidores Activos</span>
+                </h4>
+                <span id="badge-map-drivers-count" class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">0</span>
+              </div>
+              <div id="map-drivers-list" class="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+                <!-- Se llena dinámicamente -->
+              </div>
+            </div>
+
+            <!-- Pedidos en Ruta -->
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-2xl p-4">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+                  <i data-lucide="navigation" class="w-4 h-4 text-blue-400"></i>
+                  <span>Entregas en Camino</span>
+                </h4>
+                <span id="badge-map-active-orders" class="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">0</span>
+              </div>
+              <div id="map-orders-list" class="space-y-2 max-h-56 overflow-y-auto custom-scrollbar">
+                <!-- Se llena dinámicamente -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: FINANZAS & BALANCES -->
+      <div id="admin-sec-finanzas" class="space-y-6 hidden">
+        <!-- Balances Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4">
+            <span class="text-xs text-slate-400 font-medium">Ventas Netas Productos</span>
+            <div class="mt-2 text-2xl font-bold text-white" id="fin-ventas-productos">$0.00</div>
+          </div>
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4">
+            <span class="text-xs text-slate-400 font-medium">Total Costos de Envío</span>
+            <div class="mt-2 text-2xl font-bold text-emerald-400" id="fin-costos-envio">$0.00</div>
+          </div>
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4">
+            <span class="text-xs text-slate-400 font-medium">Efectivo en Mano Repartidores</span>
+            <div class="mt-2 text-2xl font-bold text-amber-400" id="fin-efectivo-calle">$0.00</div>
+            <span class="text-[10px] text-slate-400">Pendiente de ingreso a caja</span>
+          </div>
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4">
+            <span class="text-xs text-slate-400 font-medium">Comisiones por Pagar</span>
+            <div class="mt-2 text-2xl font-bold text-purple-400" id="fin-comisiones-pendientes">$0.00</div>
+            <span class="text-[10px] text-slate-400">Saldo a liquidar con repartidores</span>
+          </div>
+        </div>
+
+        <!-- Tabla de Liquidación por Repartidor -->
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-semibold text-white flex items-center space-x-2">
+                <i data-lucide="scale" class="w-4 h-4 text-emerald-400"></i>
+                <span>Liquidación de Balances por Repartidor</span>
+              </h3>
+              <p class="text-xs text-slate-400">Liquide comisiones y registre la rendición de efectivo recaudado</p>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs sm:text-sm">
+              <thead class="bg-slate-900/60 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th class="p-3 rounded-l-xl">Repartidor</th>
+                  <th class="p-3">Vehículo</th>
+                  <th class="p-3 text-right">Comisiones Ganadas</th>
+                  <th class="p-3 text-right">Efectivo en Mano (A Rendir)</th>
+                  <th class="p-3 text-right">Balance Neto</th>
+                  <th class="p-3 rounded-r-xl text-center">Acción</th>
+                </tr>
+              </thead>
+              <tbody id="table-finanzas-repartidores" class="divide-y divide-slate-700/40">
+                <!-- Se llena dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Historial de Transacciones de Caja / Balance -->
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-white flex items-center space-x-2">
+              <i data-lucide="history" class="w-4 h-4 text-blue-400"></i>
+              <span>Historial de Movimientos & Transacciones</span>
+            </h3>
+            <button onclick="exportarTransaccionesCSV()" class="px-3 py-1.5 rounded-xl bg-slate-700 text-xs text-slate-200 hover:text-white flex items-center space-x-1.5">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Exportar CSV</span>
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900/60 text-slate-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th class="p-2.5">ID</th>
+                  <th class="p-2.5">Fecha</th>
+                  <th class="p-2.5">Repartidor</th>
+                  <th class="p-2.5">Tipo</th>
+                  <th class="p-2.5 text-right">Monto</th>
+                  <th class="p-2.5">Pedido Ref.</th>
+                  <th class="p-2.5">Descripción</th>
+                  <th class="p-2.5">Registrado Por</th>
+                </tr>
+              </thead>
+              <tbody id="table-transacciones-body" class="divide-y divide-slate-700/40">
+                <!-- Se llena dinámicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: SUCURSALES & MÉTODOS DE PAGO -->
+      <div id="admin-sec-sucursales" class="space-y-6 hidden">
+        <!-- Sección Sucursales -->
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-semibold text-white flex items-center space-x-2">
+                <i data-lucide="store" class="w-4 h-4 text-emerald-400"></i>
+                <span>Sucursales & Puntos de Venta</span>
+              </h3>
+              <p class="text-xs text-slate-400">Configuración de locales, encargados y radio de cobertura</p>
+            </div>
+            <button onclick="abrirModalSucursal()" class="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center space-x-1.5 shadow">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Nueva Sucursal</span>
+            </button>
+          </div>
+          <div id="grid-sucursales" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Dinámico -->
+          </div>
+        </div>
+
+        <!-- Sección Métodos de Pago -->
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm font-semibold text-white flex items-center space-x-2">
+                <i data-lucide="credit-card" class="w-4 h-4 text-blue-400"></i>
+                <span>Métodos de Pago Aceptados</span>
+              </h3>
+              <p class="text-xs text-slate-400">Efectivo, tarjetas y billeteras digitales</p>
+            </div>
+            <button onclick="abrirModalMetodoPago()" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center space-x-1.5 shadow">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Nuevo Método</span>
+            </button>
+          </div>
+          <div id="grid-metodos-pago" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Dinámico -->
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODO 2: PANEL DEL REPARTIDOR (DRIVER MOBILE PORTAL)            -->
+    <!-- ============================================================== -->
+    <div id="view-driver" class="hidden space-y-4 max-w-2xl mx-auto">
+
+      <!-- Selector o Login del Repartidor -->
+      <div id="driver-login-box" class="bg-slate-800/90 border border-slate-700/80 rounded-3xl p-6 text-center space-y-4 shadow-xl">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-brand-500/20">
+          <i data-lucide="bike" class="w-8 h-8 text-white"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-white">Portal del Repartidor</h2>
+          <p class="text-xs text-slate-400 mt-1">Selecciona tu perfil o ingresa tu PIN de acceso</p>
+        </div>
+        <div class="space-y-3 max-w-sm mx-auto">
+          <select id="select-driver-login" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-500">
+            <option value="">Selecciona tu nombre...</option>
+          </select>
+          <input type="password" id="input-driver-pin" placeholder="PIN de 4 dígitos (opcional)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-center tracking-widest text-white focus:outline-none focus:border-brand-500">
+          <button onclick="iniciarSesionRepartidor()" class="w-full py-3 bg-gradient-to-r from-brand-600 to-emerald-600 hover:from-brand-500 text-white font-semibold rounded-xl text-sm shadow-lg shadow-brand-500/25 transition">
+            Ingresar a Mi Panel
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel Activo del Repartidor Conectado -->
+      <div id="driver-active-panel" class="hidden space-y-4">
+        <!-- Header del Repartidor -->
+        <div class="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/80 rounded-3xl p-5 shadow-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="relative">
+                <img id="driver-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" alt="Avatar" class="w-14 h-14 rounded-2xl object-cover border-2 border-brand-500">
+                <span id="driver-status-indicator" class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-slate-900"></span>
+              </div>
+              <div>
+                <h3 id="driver-name" class="font-bold text-base text-white">Juan Martínez</h3>
+                <div class="flex items-center space-x-2 text-xs text-slate-400">
+                  <span id="driver-vehicle" class="flex items-center space-x-1">
+                    <i data-lucide="bike" class="w-3.5 h-3.5 text-brand-400"></i>
+                    <span>Moto • ABC-12D</span>
+                  </span>
+                  <span>•</span>
+                  <span class="flex items-center space-x-0.5 text-amber-400 font-semibold">
+                    <i data-lucide="star" class="w-3.5 h-3.5 fill-amber-400"></i>
+                    <span id="driver-rating">4.9</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botón Salir / Desconectar -->
+            <button onclick="cerrarSesionRepartidor()" class="p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white" title="Cerrar Sesión">
+              <i data-lucide="log-out" class="w-5 h-5"></i>
+            </button>
+          </div>
+
+          <!-- Switch GPS & Estado -->
+          <div class="mt-4 pt-4 border-t border-slate-700/60 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <button id="btn-toggle-driver-gps" onclick="toggleDriverGpsTracking()" class="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
+                <i data-lucide="navigation" class="w-4 h-4"></i>
+                <span id="label-driver-gps">GPS Activo (Transmitiendo)</span>
+              </button>
+            </div>
+            <div>
+              <button id="btn-driver-online-status" onclick="toggleDriverOnlineStatus()" class="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow">
+                🟢 DISPONIBLE
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Billetera / Balances del Repartidor -->
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4">
+            <span class="text-[11px] font-medium text-slate-400">Mis Ganancias / Comisiones</span>
+            <div class="mt-1 text-2xl font-bold text-emerald-400" id="driver-stat-balance">$0.00</div>
+            <span class="text-[10px] text-slate-500">Saldo a cobrar</span>
+          </div>
+          <div class="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4">
+            <span class="text-[11px] font-medium text-slate-400">Efectivo en Mi Mano</span>
+            <div class="mt-1 text-2xl font-bold text-amber-400" id="driver-stat-cash">$0.00</div>
+            <span class="text-[10px] text-slate-500">Por rendir a sucursal</span>
+          </div>
+        </div>
+
+        <!-- Tabs de Pedidos del Repartidor -->
+        <div class="flex space-x-2 border-b border-slate-800 pb-2">
+          <button onclick="cambiarDriverTab('activos')" id="dtab-btn-activos" class="flex-1 py-2 rounded-xl text-xs font-bold text-center bg-brand-600 text-white shadow">
+            Pedidos Activos (<span id="driver-activos-count">0</span>)
+          </button>
+          <button onclick="cambiarDriverTab('historial')" id="dtab-btn-historial" class="flex-1 py-2 rounded-xl text-xs font-semibold text-center text-slate-400 hover:text-white hover:bg-slate-800">
+            Historial de Entregas
+          </button>
+        </div>
+
+        <!-- Lista de Pedidos Activos del Repartidor -->
+        <div id="driver-sec-activos" class="space-y-3">
+          <div id="driver-orders-list" class="space-y-3">
+            <!-- Dinámico -->
+          </div>
+        </div>
+
+        <!-- Historial de Pedidos Entregados por el Repartidor -->
+        <div id="driver-sec-historial" class="hidden space-y-3">
+          <div id="driver-history-list" class="space-y-3">
+            <!-- Dinámico -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ==================== MOBILE BOTTOM BAR NAVIGATION ==================== -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 px-2 py-2 flex items-center justify-around">
+    <button onclick="cambiarAdminTab('dashboard')" class="bottom-nav-btn active flex flex-col items-center justify-center text-emerald-400">
+      <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+      <span class="text-[10px] mt-1 font-medium">Dashboard</span>
+    </button>
+    <button onclick="cambiarAdminTab('pedidos')" class="bottom-nav-btn flex flex-col items-center justify-center text-slate-400">
+      <i data-lucide="package" class="w-5 h-5"></i>
+      <span class="text-[10px] mt-1 font-medium">Pedidos</span>
+    </button>
+    <button onclick="cambiarAdminTab('mapa')" class="bottom-nav-btn flex flex-col items-center justify-center text-slate-400">
+      <i data-lucide="map-pin" class="w-5 h-5"></i>
+      <span class="text-[10px] mt-1 font-medium">Mapa</span>
+    </button>
+    <button onclick="cambiarAdminTab('finanzas')" class="bottom-nav-btn flex flex-col items-center justify-center text-slate-400">
+      <i data-lucide="wallet" class="w-5 h-5"></i>
+      <span class="text-[10px] mt-1 font-medium">Finanzas</span>
+    </button>
+    <button onclick="cambiarModo('driver')" class="bottom-nav-btn flex flex-col items-center justify-center text-slate-400">
+      <i data-lucide="bike" class="w-5 h-5"></i>
+      <span class="text-[10px] mt-1 font-medium">Repartidor</span>
+    </button>
+  </nav>
+
+  <!-- ============================================================== -->
+  <!-- MODALES DE CREACIÓN Y EDICIÓN                                  -->
+  <!-- ============================================================== -->
+
+  <!-- MODAL 1: CREAR NUEVO PEDIDO -->
+  <div id="modal-nuevo-pedido" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="font-bold text-lg text-white flex items-center space-x-2">
+          <i data-lucide="plus-circle" class="w-5 h-5 text-brand-500"></i>
+          <span>Crear Nuevo Pedido de Entrega</span>
+        </h3>
+        <button onclick="cerrarModalNuevoPedido()" class="text-slate-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-nuevo-pedido" onsubmit="guardarNuevoPedido(event)" class="space-y-3.5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Nombre del Cliente *</label>
+            <input type="text" id="np-cliente-nombre" required placeholder="Ej: Marcela Gómez" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Teléfono / WhatsApp *</label>
+            <input type="tel" id="np-cliente-telefono" required placeholder="+57 300 123 4567" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Dirección de Entrega *</label>
+          <div class="relative">
+            <input type="text" id="np-cliente-direccion" required placeholder="Ej: Calle 45 #13-35 Apt 402" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            <button type="button" onclick="geocodificarDireccionModal()" title="Obtener coordenadas aproximadas" class="absolute right-2 top-2 text-xs text-brand-400 hover:text-brand-300 flex items-center space-x-1">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+              <span>Geo</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Latitud (Destino)</label>
+            <input type="number" step="any" id="np-cliente-lat" placeholder="4.6280" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Longitud (Destino)</label>
+            <input type="number" step="any" id="np-cliente-lng" placeholder="-74.0680" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Sucursal de Despacho *</label>
+            <select id="np-sucursal" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+              <!-- Se llena con sucursales -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Asignar Repartidor (Opcional)</label>
+            <select id="np-repartidor" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+              <option value="">Sin asignar (Dejar en cola)</option>
+              <!-- Repartidores activos -->
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Detalle de Productos / Pedido</label>
+          <textarea id="np-items-detalle" rows="2" placeholder="2x Hamburguesas Clásicas, 1x Papas Supremas..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"></textarea>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Subtotal Prod. ($)</label>
+            <input type="number" step="0.01" id="np-monto-productos" oninput="calcularTotalNuevoPedido()" value="20.00" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Costo Envío ($)</label>
+            <input type="number" step="0.01" id="np-costo-envio" oninput="calcularTotalNuevoPedido()" value="3.50" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Total a Cobrar</label>
+            <input type="text" id="np-monto-total" readonly value="$23.50" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-emerald-400 font-bold focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Método de Pago *</label>
+            <select id="np-metodo-pago" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+              <!-- Métodos de pago dinámicos -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Instrucciones / Notas</label>
+            <input type="text" id="np-notas" placeholder="Ej: Timbre no suena, llamar al llegar" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+
+        <div class="pt-3 flex justify-end space-x-2">
+          <button type="button" onclick="cerrarModalNuevoPedido()" class="px-4 py-2 rounded-xl bg-slate-800 text-xs text-slate-300 hover:text-white">Cancelar</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-xs font-semibold text-white shadow-lg shadow-brand-500/20">Crear Pedido</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: LIQUIDACIÓN DE BALANCE CON REPARTIDOR -->
+  <div id="modal-liquidar-balance" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="font-bold text-base text-white flex items-center space-x-2">
+          <i data-lucide="scale" class="w-5 h-5 text-emerald-400"></i>
+          <span>Liquidar Cuentas con Repartidor</span>
+        </h3>
+        <button onclick="cerrarModalLiquidar()" class="text-slate-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <p class="text-xs text-slate-300" id="liq-modal-driver-info">Repartidor: ...</p>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Monto de Comisiones a Pagar al Repartidor ($)</label>
+          <input type="number" step="0.01" id="liq-comisiones" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+          <span class="text-[10px] text-slate-500">Paga las ganancias acumuladas al repartidor</span>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Efectivo Rendido a Caja por el Repartidor ($)</label>
+          <input type="number" step="0.01" id="liq-efectivo" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+          <span class="text-[10px] text-slate-500">Dinero cobrado en efectivo que el repartidor entrega a la tienda</span>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Observaciones / Comprobante</label>
+          <input type="text" id="liq-notas" placeholder="Ej: Liquidación de turno fin de semana" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+      </div>
+
+      <div class="pt-3 flex justify-end space-x-2">
+        <button onclick="cerrarModalLiquidar()" class="px-4 py-2 rounded-xl bg-slate-800 text-xs text-slate-300 hover:text-white">Cancelar</button>
+        <button onclick="confirmarLiquidacionBalance()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white shadow">Registrar Liquidación</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: CREAR/EDITAR SUCURSAL -->
+  <div id="modal-sucursal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="font-bold text-base text-white flex items-center space-x-2">
+          <i data-lucide="store" class="w-5 h-5 text-emerald-400"></i>
+          <span id="modal-sucursal-title">Gestionar Sucursal</span>
+        </h3>
+        <button onclick="cerrarModalSucursal()" class="text-slate-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <form id="form-sucursal" onsubmit="guardarDatosSucursal(event)" class="space-y-3">
+        <input type="hidden" id="suc-id">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Nombre de Sucursal *</label>
+          <input type="text" id="suc-nombre" required placeholder="Ej: Sucursal Chapinero" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Dirección *</label>
+          <input type="text" id="suc-direccion" required placeholder="Calle 67 #9-20" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Teléfono</label>
+            <input type="text" id="suc-telefono" placeholder="+57 300 000 0000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Encargado</label>
+            <input type="text" id="suc-encargado" placeholder="Nombre encargado" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Latitud</label>
+            <input type="number" step="any" id="suc-lat" placeholder="4.6532" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Longitud</label>
+            <input type="number" step="any" id="suc-lng" placeholder="-74.0620" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Radio de Cobertura (km)</label>
+          <input type="number" step="0.5" id="suc-radio" value="6" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div class="pt-3 flex justify-end space-x-2">
+          <button type="button" onclick="cerrarModalSucursal()" class="px-4 py-2 rounded-xl bg-slate-800 text-xs text-slate-300">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-xs font-semibold text-white">Guardar Sucursal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 4: CREAR/EDITAR MÉTODO DE PAGO -->
+  <div id="modal-metodo-pago" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="font-bold text-base text-white flex items-center space-x-2">
+          <i data-lucide="credit-card" class="w-5 h-5 text-blue-400"></i>
+          <span id="modal-mp-title">Gestionar Método de Pago</span>
+        </h3>
+        <button onclick="cerrarModalMetodoPago()" class="text-slate-400 hover:text-white p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <form id="form-metodo-pago" onsubmit="guardarDatosMetodoPago(event)" class="space-y-3">
+        <input type="hidden" id="mp-id">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Nombre del Método *</label>
+          <input type="text" id="mp-nombre" required placeholder="Ej: Billetera Digital (Nequi / Daviplata)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Tipo de Pago *</label>
+          <select id="mp-tipo" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            <option value="EFECTIVO">EFECTIVO (Rendición obligatoria)</option>
+            <option value="DIGITAL">DIGITAL (Billetera electrónica)</option>
+            <option value="TARJETA">TARJETA (Datáfono inalámbrico)</option>
+            <option value="TRANSFERENCIA">TRANSFERENCIA (Bancaria con comprobante)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Instrucciones para el Repartidor / Cliente</label>
+          <input type="text" id="mp-instrucciones" placeholder="Llevar datáfono cargado / pedir soporte de pago" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div class="pt-3 flex justify-end space-x-2">
+          <button type="button" onclick="cerrarModalMetodoPago()" class="px-4 py-2 rounded-xl bg-slate-800 text-xs text-slate-300">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS CONTAINER -->
+  <div id="toast-container" class="fixed bottom-20 md:bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- ============================================================== -->
+  <!-- JAVASCRIPT: LÓGICA COMPLETA DEL SISTEMA                        -->
+  <!-- ============================================================== -->
+  <script>
+    // --- ESTADO GLOBAL DE LA APLICACIÓN ---
+    let APP_STATE = {
+      mode: 'admin', // 'admin' | 'driver'
+      adminTab: 'dashboard',
+      driverTab: 'activos',
+      config: {},
+      sucursales: [],
+      metodosPago: [],
+      repartidores: [],
+      pedidos: [],
+      pedidosFiltrados: [],
+      dashboardData: null,
+      activeDriver: null, // Si está en modo repartidor
+      driverGpsWatcherId: null,
+      autoRefreshGpsInterval: null,
+      vistaPedidos: 'cards',
+      filtroEstado: 'TODOS',
+      busquedaTexto: ''
+    };
+
+    // --- VARIABLES DE MAPA Y CHARTS ---
+    let leafletMap = null;
+    let mapMarkers = {
+      sucursales: [],
+      repartidores: [],
+      pedidos: []
+    };
+    let chartEstados = null;
+    let chartMetodos = null;
+    let chartSucursales = null;
+
+    // --- INICIALIZACIÓN ---
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      inicializarApp();
+    });
+
+    async function inicializarApp() {
+      mostrarToast('Cargando sistema de entregas...', 'info');
+      try {
+        const data = await ejecutarLlamadaServidor('getInitialData');
+        if (data && data.success) {
+          APP_STATE.config = data.config || {};
+          APP_STATE.sucursales = data.sucursales || [];
+          APP_STATE.metodosPago = data.metodosPago || [];
+          APP_STATE.repartidores = data.repartidores || [];
+          APP_STATE.pedidos = data.pedidos || [];
+          APP_STATE.dashboardData = data.dashboard || {};
+
+          if (APP_STATE.config.NOMBRE_NEGOCIO) {
+            document.getElementById('header-business-name').textContent = APP_STATE.config.NOMBRE_NEGOCIO;
+          }
+
+          poblarSelects();
+          renderizarTodo();
+          iniciarAutoRefresh();
+        } else {
+          // Si falló (p.ej. local), usamos datos de fallback
+          cargarDatosDemoFallback();
+        }
+      } catch (err) {
+        console.warn('Ejecutando en entorno local o sin GAS, usando datos demo:', err);
+        cargarDatosDemoFallback();
+      }
+    }
+
+    // --- COMUNICADOR CON GOOGLE APPS SCRIPT / BACKEND ---
+    function ejecutarLlamadaServidor(action, payload = {}) {
+      return new Promise((resolve, reject) => {
+        // 1. Si corre dentro de Google Apps Script iframe
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler((response) => resolve(response))
+            .withFailureHandler((error) => reject(error))
+            .ejecutarAccion(action, payload);
+        } else {
+          // 2. Si corre como Servidor Web REST o Local Mock
+          fetch('/api', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action, data: payload })
+          })
+          .then(res => res.json())
+          .then(data => resolve(data))
+          .catch(err => {
+            // Mock handler en memoria para previsualización local fluida
+            const mockRes = simularRespuestaLocal(action, payload);
+            if (mockRes) resolve(mockRes);
+            else reject(err);
+          });
+        }
+      });
+    }
+
+    // --- FALLBACK Y MOCK DATA PARA PRUEBAS LOCALES INMEDIATAS ---
+    function cargarDatosDemoFallback() {
+      APP_STATE.config = {
+        NOMBRE_NEGOCIO: 'Delivery Express Pro',
+        MONEDA: '$',
+        LATITUD_CENTRAL: '4.60971',
+        LONGITUD_CENTRAL: '-74.08175',
+        ZOOM_MAPA: '13',
+        COMISION_PORCENTAJE: '15'
+      };
+      APP_STATE.sucursales = [
+        { id: 'SUC-01', nombre: 'Sucursal Centro', direccion: 'Cra. 7 #32-16', telefono: '+57 300 123 4567', latitud: 4.60971, longitud: -74.08175, encargado: 'Carlos Gómez', radio_cobertura_km: 8, activo: 'SI' },
+        { id: 'SUC-02', nombre: 'Sucursal Norte', direccion: 'Calle 116 #19-45', telefono: '+57 310 987 6543', latitud: 4.69850, longitud: -74.03210, encargado: 'Mariana López', radio_cobertura_km: 10, activo: 'SI' },
+        { id: 'SUC-03', nombre: 'Sucursal Chapinero', direccion: 'Calle 67 #9-20', telefono: '+57 320 555 7890', latitud: 4.65320, longitud: -74.06200, encargado: 'Andrés Silva', radio_cobertura_km: 6, activo: 'SI' }
+      ];
+      APP_STATE.metodosPago = [
+        { id: 'MP-01', nombre: 'Efectivo contra entrega', tipo: 'EFECTIVO', instrucciones: 'Cobrar al entregar', activo: 'SI' },
+        { id: 'MP-02', nombre: 'Tarjeta Débito/Crédito (Datafono)', tipo: 'TARJETA', instrucciones: 'Llevar datáfono', activo: 'SI' },
+        { id: 'MP-03', nombre: 'Transferencia Bancaria', tipo: 'TRANSFERENCIA', instrucciones: 'Validar comprobante', activo: 'SI' },
+        { id: 'MP-04', nombre: 'Billetera Digital (Yape / Nequi)', tipo: 'DIGITAL', instrucciones: 'Pago previo', activo: 'SI' }
+      ];
+      APP_STATE.repartidores = [
+        { id: 'REP-01', nombre: 'Juan Martínez', telefono: '+57 301 234 5678', vehiculo: 'Moto', placa: 'ABC-12D', pin: '1234', estado: 'ACTIVO', latitud: 4.61500, longitud: -74.07500, balance_comisiones: 45.50, efectivo_en_mano: 68.00, calificacion: 4.9, foto_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
+        { id: 'REP-02', nombre: 'Brayan Rodríguez', telefono: '+57 312 345 6789', vehiculo: 'Moto', placa: 'XYZ-98F', pin: '2345', estado: 'EN_RUTA', latitud: 4.68500, longitud: -74.04500, balance_comisiones: 32.00, efectivo_en_mano: 42.50, calificacion: 4.8, foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
+        { id: 'REP-03', nombre: 'Mateo Morales', telefono: '+57 318 765 4321', vehiculo: 'Bicicleta', placa: 'BICI-03', pin: '3456', estado: 'ACTIVO', latitud: 4.64800, longitud: -74.06000, balance_comisiones: 28.00, efectivo_en_mano: 0.00, calificacion: 5.0, foto_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150' },
+        { id: 'REP-04', nombre: 'Camila Benítez', telefono: '+57 315 444 3322', vehiculo: 'Moto', placa: 'KLM-45E', pin: '4567', estado: 'DESCONECTADO', latitud: 4.62200, longitud: -74.08800, balance_comisiones: 15.00, efectivo_en_mano: 0.00, calificacion: 4.7, foto_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' }
+      ];
+      APP_STATE.pedidos = [
+        { id: 'PED-1001', fecha_creacion: new Date(Date.now() - 3600000).toISOString(), cliente_nombre: 'Lucía Fernández', cliente_telefono: '+57 300 999 1122', cliente_direccion: 'Calle 45 #13-35 Apt 402', cliente_lat: 4.6280, cliente_lng: -74.0680, sucursal_id: 'SUC-01', sucursal_nombre: 'Sucursal Centro', items_detalle: '2x Burger Doble, 1x Papas, 1x Bebida', monto_productos: 22.50, costo_envio: 3.50, monto_total: 26.00, metodo_pago: 'Efectivo contra entrega', estado_pago: 'PAGADO', repartidor_id: 'REP-01', repartidor_nombre: 'Juan Martínez', estado: 'ENTREGADO', notas_entrega: 'Citófono 402', tiempo_entrega_min: 28 },
+        { id: 'PED-1002', fecha_creacion: new Date(Date.now() - 1800000).toISOString(), cliente_nombre: 'Diego Sánchez', cliente_telefono: '+57 311 222 3344', cliente_direccion: 'Cra 15 #119-12 Torre B', cliente_lat: 4.6950, cliente_lng: -74.0350, sucursal_id: 'SUC-02', sucursal_nombre: 'Sucursal Norte', items_detalle: '1x Pizza Familiar 4 Quesos, 1x Alitas BBQ', monto_productos: 28.00, costo_envio: 4.00, monto_total: 32.00, metodo_pago: 'Tarjeta Débito/Crédito (Datafono)', estado_pago: 'PENDIENTE', repartidor_id: 'REP-02', repartidor_nombre: 'Brayan Rodríguez', estado: 'EN_RUTA', notas_entrega: 'Dejar en recepción con vigilante' },
+        { id: 'PED-1003', fecha_creacion: new Date(Date.now() - 900000).toISOString(), cliente_nombre: 'Carolina Vega', cliente_telefono: '+57 314 888 7766', cliente_direccion: 'Calle 63 #7-40 Int 3', cliente_lat: 4.6490, cliente_lng: -74.0610, sucursal_id: 'SUC-03', sucursal_nombre: 'Sucursal Chapinero', items_detalle: '3x Bowls de Pollo Teriyaki', monto_productos: 35.00, costo_envio: 3.50, monto_total: 38.50, metodo_pago: 'Billetera Digital (Yape / Nequi)', estado_pago: 'PAGADO', repartidor_id: 'REP-03', repartidor_nombre: 'Mateo Morales', estado: 'ASIGNADO', notas_entrega: 'Timbre a la calle' },
+        { id: 'PED-1004', fecha_creacion: new Date().toISOString(), cliente_nombre: 'Esteban Restrepo', cliente_telefono: '+57 317 444 8899', cliente_direccion: 'Cra 8 #35-60', cliente_lat: 4.6180, cliente_lng: -74.0720, sucursal_id: 'SUC-01', sucursal_nombre: 'Sucursal Centro', items_detalle: '1x Parrilla Mixta, 2x Cervezas', monto_productos: 42.00, costo_envio: 3.50, monto_total: 45.50, metodo_pago: 'Efectivo contra entrega', estado_pago: 'PENDIENTE', repartidor_id: '', repartidor_nombre: '', estado: 'PENDIENTE', notas_entrega: 'Llamar antes de llegar' }
+      ];
+
+      calcularDashboardLocal();
+      poblarSelects();
+      renderizarTodo();
+      iniciarAutoRefresh();
+      mostrarToast('Modo de prueba activo con datos demo', 'success');
+    }
+
+    function simularRespuestaLocal(action, payload) {
+      if (action === 'getInitialData') {
+        return { success: true, config: APP_STATE.config, sucursales: APP_STATE.sucursales, metodosPago: APP_STATE.metodosPago, repartidores: APP_STATE.repartidores, pedidos: APP_STATE.pedidos };
+      }
+      return { success: true };
+    }
+
+    function calcularDashboardLocal() {
+      let totalProd = 0, totalEnv = 0, entregados = 0, enRuta = 0, pendientes = 0, cancelados = 0;
+      let comisiones = 0, efectivo = 0;
+      let estados = {}, metodos = {}, sucs = {};
+
+      APP_STATE.pedidos.forEach(p => {
+        estados[p.estado] = (estados[p.estado] || 0) + 1;
+        if (p.estado === 'ENTREGADO') entregados++;
+        else if (p.estado === 'EN_RUTA') enRuta++;
+        else if (p.estado === 'PENDIENTE' || p.estado === 'ASIGNADO') pendientes++;
+        else if (p.estado === 'CANCELADO') cancelados++;
+
+        if (p.estado !== 'CANCELADO') {
+          totalProd += parseFloat(p.monto_productos || 0);
+          totalEnv += parseFloat(p.costo_envio || 0);
+          metodos[p.metodo_pago] = (metodos[p.metodo_pago] || 0) + parseFloat(p.monto_total || 0);
+          sucs[p.sucursal_nombre] = (sucs[p.sucursal_nombre] || 0) + parseFloat(p.monto_total || 0);
+        }
+      });
+
+      APP_STATE.repartidores.forEach(r => {
+        comisiones += parseFloat(r.balance_comisiones || 0);
+        efectivo += parseFloat(r.efectivo_en_mano || 0);
+      });
+
+      const ranking = APP_STATE.repartidores.map(r => {
+        const count = APP_STATE.pedidos.filter(p => p.repartidor_id === r.id && p.estado === 'ENTREGADO').length;
+        return {
+          id: r.id,
+          nombre: r.nombre,
+          vehiculo: r.vehiculo,
+          estado: r.estado,
+          entregas: count,
+          balance_comisiones: r.balance_comisiones,
+          efectivo_en_mano: r.efectivo_en_mano,
+          calificacion: r.calificacion || 5.0
+        };
+      });
+
+      APP_STATE.dashboardData = {
+        kpis: {
+          totalPedidos: APP_STATE.pedidos.length,
+          entregados: entregados,
+          enRuta: enRuta,
+          pendientes: pendientes,
+          cancelados: cancelados,
+          tasaEfectividad: APP_STATE.pedidos.length > 0 ? Math.round((entregados / APP_STATE.pedidos.length) * 100) : 100,
+          tiempoPromedioMin: 32,
+          totalVentasProductos: totalProd,
+          totalEnvios: totalEnv,
+          totalIngresos: totalProd + totalEnv,
+          totalComisionesPendientes: comisiones,
+          totalEfectivoEnCalle: efectivo,
+          repartidoresActivos: APP_STATE.repartidores.filter(r => r.estado !== 'DESCONECTADO').length,
+          totalRepartidores: APP_STATE.repartidores.length
+        },
+        charts: {
+          estados: estados,
+          ventasPorMetodo: metodos,
+          ventasPorSucursal: sucs
+        },
+        rankingRepartidores: ranking
+      };
+    }
+
+    // --- RENDERIZACIÓN GLOBAL ---
+    function renderizarTodo() {
+      aplicarFiltrosPedidos();
+      renderizarKPIs();
+      renderizarCharts();
+      renderizarRankingRepartidores();
+      renderizarPedidos();
+      renderizarFinanzas();
+      renderizarSucursales();
+      renderizarMetodosPago();
+      actualizarMapa();
+      if (APP_STATE.activeDriver) {
+        renderizarPanelRepartidor();
+      }
+      lucide.createIcons();
+    }
+
+    function poblarSelects() {
+      // 1. Select sucursales en modal nuevo pedido
+      const selSuc = document.getElementById('np-sucursal');
+      selSuc.innerHTML = APP_STATE.sucursales.map(s => `<option value="${s.id}" data-nombre="${s.nombre}">${s.nombre} (${s.direccion})</option>`).join('');
+
+      // 2. Select repartidores en modal nuevo pedido
+      const selRep = document.getElementById('np-repartidor');
+      selRep.innerHTML = `<option value="">Sin asignar (Dejar en cola)</option>` + 
+        APP_STATE.repartidores.map(r => `<option value="${r.id}" data-nombre="${r.nombre}">${r.nombre} (${r.vehiculo} - ${r.estado})</option>`).join('');
+
+      // 3. Select métodos de pago en modal nuevo pedido
+      const selMp = document.getElementById('np-metodo-pago');
+      selMp.innerHTML = APP_STATE.metodosPago.map(m => `<option value="${m.nombre}">${m.nombre}</option>`).join('');
+
+      // 4. Select login repartidor
+      const selDriverLogin = document.getElementById('select-driver-login');
+      selDriverLogin.innerHTML = `<option value="">Selecciona tu nombre...</option>` +
+        APP_STATE.repartidores.map(r => `<option value="${r.id}">${r.nombre} (${r.vehiculo})</option>`).join('');
+    }
+
+    // --- NAVEGACIÓN Y CAMBIO DE MODO ---
+    function cambiarModo(modo) {
+      APP_STATE.mode = modo;
+      const vAdmin = document.getElementById('view-admin');
+      const vDriver = document.getElementById('view-driver');
+      const btnAdmin = document.getElementById('btn-mode-admin');
+      const btnDriver = document.getElementById('btn-mode-driver');
+
+      if (modo === 'admin') {
+        vAdmin.classList.remove('hidden');
+        vDriver.classList.add('hidden');
+        btnAdmin.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-brand-600 text-white shadow';
+        btnDriver.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all';
+        if (APP_STATE.adminTab === 'mapa') {
+          setTimeout(() => inicializarOMapResize(), 200);
+        }
+      } else {
+        vAdmin.classList.add('hidden');
+        vDriver.classList.remove('hidden');
+        btnDriver.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-brand-600 text-white shadow';
+        btnAdmin.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-all';
+        
+        // Si ya hay sesión guardada en localStorage
+        const savedDriverId = localStorage.getItem('DELIVERY_DRIVER_ID');
+        if (savedDriverId && !APP_STATE.activeDriver) {
+          seleccionarRepartidorPorId(savedDriverId);
+        }
+      }
+      lucide.createIcons();
+    }
+
+    function cambiarAdminTab(tab) {
+      APP_STATE.adminTab = tab;
+      
+      // Actualizar botones de navegación desktop
+      document.querySelectorAll('.admin-tab-btn').forEach(b => {
+        b.classList.remove('active', 'bg-slate-800', 'text-white');
+        b.classList.add('text-slate-400');
+      });
+      const activeBtn = document.getElementById(`tab-btn-${tab}`);
+      if (activeBtn) {
+        activeBtn.classList.add('active', 'bg-slate-800', 'text-white');
+        activeBtn.classList.remove('text-slate-400');
+      }
+
+      // Actualizar botones barra inferior móvil
+      document.querySelectorAll('.bottom-nav-btn').forEach(b => {
+        b.classList.remove('text-emerald-400');
+        b.classList.add('text-slate-400');
+      });
+
+      // Ocultar todas las secciones
+      document.getElementById('admin-sec-dashboard').classList.add('hidden');
+      document.getElementById('admin-sec-pedidos').classList.add('hidden');
+      document.getElementById('admin-sec-mapa').classList.add('hidden');
+      document.getElementById('admin-sec-finanzas').classList.add('hidden');
+      document.getElementById('admin-sec-sucursales').classList.add('hidden');
+
+      // Mostrar sección activa
+      const activeSec = document.getElementById(`admin-sec-${tab}`);
+      if (activeSec) activeSec.classList.remove('hidden');
+
+      if (tab === 'mapa') {
+        setTimeout(() => inicializarOMapResize(), 200);
+      }
+      lucide.createIcons();
+    }
+
+    // --- DASHBOARD KPIS & CHARTS ---
+    function renderizarKPIs() {
+      const k = APP_STATE.dashboardData ? APP_STATE.dashboardData.kpis : null;
+      if (!k) return;
+
+      document.getElementById('kpi-total-pedidos').textContent = k.totalPedidos;
+      document.getElementById('kpi-pedidos-hoy').textContent = `${k.enRuta + k.pendientes} en curso`;
+      document.getElementById('kpi-tasa-efectividad').textContent = `${k.tasaEfectividad}%`;
+      document.getElementById('kpi-entregados-count').textContent = `${k.entregados} entregados`;
+      document.getElementById('kpi-tiempo-promedio').textContent = `${k.tiempoPromedioMin} min`;
+      document.getElementById('kpi-ingresos-totales').textContent = `$${k.totalIngresos.toFixed(2)}`;
+      document.getElementById('kpi-envios-totales').textContent = `$${k.totalEnvios.toFixed(2)} envíos`;
+      document.getElementById('badge-pedidos-count').textContent = k.totalPedidos;
+    }
+
+    function renderizarCharts() {
+      if (!APP_STATE.dashboardData || !APP_STATE.dashboardData.charts) return;
+      const c = APP_STATE.dashboardData.charts;
+
+      // 1. Chart Estados
+      const ctxEstados = document.getElementById('chart-estados');
+      if (ctxEstados) {
+        if (chartEstados) chartEstados.destroy();
+        const labels = Object.keys(c.estados || {});
+        const data = Object.values(c.estados || {});
+        const colors = {
+          'ENTREGADO': '#22c55e',
+          'EN_RUTA': '#3b82f6',
+          'ASIGNADO': '#8b5cf6',
+          'PENDIENTE': '#f59e0b',
+          'CANCELADO': '#ef4444'
+        };
+        const bgColors = labels.map(l => colors[l] || '#64748b');
+
+        chartEstados = new Chart(ctxEstados, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: data,
+              backgroundColor: bgColors,
+              borderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12 } }
+            }
+          }
+        });
+      }
+
+      // 2. Chart Métodos de Pago
+      const ctxMetodos = document.getElementById('chart-metodos');
+      if (ctxMetodos) {
+        if (chartMetodos) chartMetodos.destroy();
+        const labels = Object.keys(c.ventasPorMetodo || {});
+        const data = Object.values(c.ventasPorMetodo || {});
+
+        chartMetodos = new Chart(ctxMetodos, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: data,
+              backgroundColor: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899'],
+              borderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12 } }
+            }
+          }
+        });
+      }
+
+      // 3. Chart Ventas por Sucursal
+      const ctxSuc = document.getElementById('chart-sucursales');
+      if (ctxSuc) {
+        if (chartSucursales) chartSucursales.destroy();
+        const labels = Object.keys(c.ventasPorSucursal || {});
+        const data = Object.values(c.ventasPorSucursal || {});
+
+        chartSucursales = new Chart(ctxSuc, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Ventas Totales ($)',
+              data: data,
+              backgroundColor: '#10b981',
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { ticks: { color: '#94a3b8' }, grid: { display: false } },
+              y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      }
+    }
+
+    function renderizarRankingRepartidores() {
+      const tbody = document.getElementById('table-ranking-repartidores');
+      if (!tbody || !APP_STATE.dashboardData) return;
+      const ranking = APP_STATE.dashboardData.rankingRepartidores || [];
+
+      tbody.innerHTML = ranking.map(r => {
+        let stBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-700 text-slate-300">${r.estado}</span>`;
+        if (r.estado === 'ACTIVO') stBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-400">DISPONIBLE</span>`;
+        else if (r.estado === 'EN_RUTA') stBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/20 text-blue-400">EN RUTA</span>`;
+
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="p-3 font-semibold text-white flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full ${r.estado === 'ACTIVO' ? 'bg-emerald-400' : (r.estado === 'EN_RUTA' ? 'bg-blue-400' : 'bg-slate-500')}"></span>
+              <span>${r.nombre}</span>
+            </td>
+            <td class="p-3 text-slate-300">${r.vehiculo}</td>
+            <td class="p-3">${stBadge}</td>
+            <td class="p-3 text-center font-bold text-white">${r.entregas}</td>
+            <td class="p-3 text-center font-bold text-amber-400">★ ${r.calificacion.toFixed(1)}</td>
+            <td class="p-3 text-right font-bold text-emerald-400">$${parseFloat(r.balance_comisiones || 0).toFixed(2)}</td>
+            <td class="p-3 text-right font-bold text-amber-400">$${parseFloat(r.efectivo_en_mano || 0).toFixed(2)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // --- GESTIÓN DE PEDIDOS ---
+    function aplicarFiltrosPedidos() {
+      let filtered = [...APP_STATE.pedidos];
+
+      if (APP_STATE.filtroEstado !== 'TODOS') {
+        filtered = filtered.filter(p => p.estado === APP_STATE.filtroEstado);
+      }
+
+      if (APP_STATE.busquedaTexto.trim()) {
+        const q = APP_STATE.busquedaTexto.toLowerCase();
+        filtered = filtered.filter(p => 
+          (p.cliente_nombre && p.cliente_nombre.toLowerCase().includes(q)) ||
+          (p.cliente_telefono && p.cliente_telefono.includes(q)) ||
+          (p.cliente_direccion && p.cliente_direccion.toLowerCase().includes(q)) ||
+          (p.id && p.id.toLowerCase().includes(q)) ||
+          (p.repartidor_nombre && p.repartidor_nombre.toLowerCase().includes(q))
+        );
+      }
+
+      APP_STATE.pedidosFiltrados = filtered;
+    }
+
+    function filtrarPedidosPorEstado(estado) {
+      APP_STATE.filtroEstado = estado;
+      document.querySelectorAll('.filter-btn').forEach(b => {
+        b.className = 'filter-btn px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-700/70 text-slate-300 hover:text-white';
+      });
+      event.target.className = 'filter-btn active px-3 py-1.5 rounded-xl text-xs font-semibold bg-brand-600 text-white';
+      aplicarFiltrosPedidos();
+      renderizarPedidos();
+    }
+
+    function buscarPedidos(texto) {
+      APP_STATE.busquedaTexto = texto;
+      aplicarFiltrosPedidos();
+      renderizarPedidos();
+    }
+
+    function cambiarVistaPedidos(vista) {
+      APP_STATE.vistaPedidos = vista;
+      const cCards = document.getElementById('pedidos-container-cards');
+      const cTabla = document.getElementById('pedidos-container-tabla');
+      const bCards = document.getElementById('btn-vista-cards');
+      const bTabla = document.getElementById('btn-vista-tabla');
+
+      if (vista === 'cards') {
+        cCards.classList.remove('hidden');
+        cTabla.classList.add('hidden');
+        bCards.className = 'p-1.5 rounded-lg bg-slate-800 text-white';
+        bTabla.className = 'p-1.5 rounded-lg text-slate-400 hover:text-white';
+      } else {
+        cCards.classList.add('hidden');
+        cTabla.classList.remove('hidden');
+        bTabla.className = 'p-1.5 rounded-lg bg-slate-800 text-white';
+        bCards.className = 'p-1.5 rounded-lg text-slate-400 hover:text-white';
+      }
+    }
+
+    function renderizarPedidos() {
+      const containerCards = document.getElementById('pedidos-container-cards');
+      const tbody = document.getElementById('table-pedidos-body');
+      const list = APP_STATE.pedidosFiltrados;
+
+      if (!list || list.length === 0) {
+        containerCards.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-400 bg-slate-800/40 rounded-3xl border border-dashed border-slate-700">
+            <i data-lucide="inbox" class="w-10 h-10 mx-auto text-slate-500 mb-2"></i>
+            <p class="font-medium">No hay pedidos para mostrar</p>
+            <p class="text-xs text-slate-500">Crea uno nuevo o ajusta los filtros</p>
+          </div>
+        `;
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">No hay pedidos disponibles</td></tr>`;
+        lucide.createIcons();
+        return;
+      }
+
+      // Render Cards
+      containerCards.innerHTML = list.map(p => {
+        let badgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+        if (p.estado === 'ASIGNADO') badgeColor = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+        else if (p.estado === 'EN_RUTA') badgeColor = 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+        else if (p.estado === 'ENTREGADO') badgeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+        else if (p.estado === 'CANCELADO') badgeColor = 'bg-red-500/20 text-red-300 border-red-500/30';
+
+        const repOptions = APP_STATE.repartidores.map(r => `
+          <option value="${r.id}" ${r.id === p.repartidor_id ? 'selected' : ''}>${r.nombre} (${r.vehiculo})</option>
+        `).join('');
+
+        const telNum = (p.cliente_telefono || '').replace(/\D/g, '');
+        const waLink = `https://wa.me/${telNum}?text=${encodeURIComponent('Hola ' + p.cliente_nombre + ', te contactamos de ' + (APP_STATE.config.NOMBRE_NEGOCIO || 'Delivery') + ' sobre tu pedido ' + p.id)}`;
+
+        return `
+          <div class="bg-slate-800/70 border border-slate-700/80 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-slate-600 transition shadow-lg">
+            <div>
+              <div class="flex items-center justify-between pb-2 border-b border-slate-700/60">
+                <span class="font-extrabold text-sm text-brand-400">${p.id}</span>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badgeColor}">
+                  ${p.estado}
+                </span>
+              </div>
+
+              <!-- Info Cliente -->
+              <div class="mt-2.5 space-y-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-bold text-sm text-white">${p.cliente_nombre}</h4>
+                  <a href="${waLink}" target="_blank" class="p-1 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white transition" title="Enviar WhatsApp">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                  </a>
+                </div>
+                <p class="text-xs text-slate-300 flex items-start space-x-1.5">
+                  <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5"></i>
+                  <span>${p.cliente_direccion || 'Sin dirección registrada'}</span>
+                </p>
+                <p class="text-[11px] text-slate-400 flex items-center space-x-1">
+                  <i data-lucide="store" class="w-3 h-3 text-teal-400"></i>
+                  <span>${p.sucursal_nombre || 'Sucursal principal'}</span>
+                </p>
+              </div>
+
+              <!-- Detalle Productos -->
+              <div class="mt-2.5 p-2 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-300">
+                <p class="line-clamp-2">${p.items_detalle || 'Sin detalle de productos'}</p>
+                ${p.notas_entrega ? `<p class="text-[10px] text-amber-400/90 mt-1 italic">Nota: ${p.notas_entrega}</p>` : ''}
+              </div>
+
+              <!-- Total y Pago -->
+              <div class="mt-3 flex items-center justify-between text-xs">
+                <div>
+                  <span class="text-slate-400">Total:</span>
+                  <span class="font-extrabold text-white ml-1 text-sm">$${parseFloat(p.monto_total || 0).toFixed(2)}</span>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded-md bg-slate-700 text-slate-300">
+                  ${p.metodo_pago}
+                </span>
+              </div>
+            </div>
+
+            <!-- Footer: Asignar Repartidor y Acciones -->
+            <div class="pt-2 border-t border-slate-700/60 space-y-2">
+              <div class="flex items-center space-x-2">
+                <select onchange="cambiarRepartidorPedido('${p.id}', this.value)" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500">
+                  <option value="">Asignar Repartidor...</option>
+                  ${repOptions}
+                </select>
+              </div>
+
+              <div class="flex items-center space-x-1 text-xs">
+                ${p.estado === 'PENDIENTE' ? `
+                  <button onclick="actualizarEstadoPedido('${p.id}', 'ASIGNADO')" class="flex-1 py-1.5 rounded-xl bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600 hover:text-white transition font-medium">Asignar</button>
+                ` : ''}
+                ${p.estado === 'ASIGNADO' ? `
+                  <button onclick="actualizarEstadoPedido('${p.id}', 'EN_RUTA')" class="flex-1 py-1.5 rounded-xl bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white transition font-medium">Despachar (En Ruta)</button>
+                ` : ''}
+                ${p.estado === 'EN_RUTA' ? `
+                  <button onclick="actualizarEstadoPedido('${p.id}', 'ENTREGADO')" class="flex-1 py-1.5 rounded-xl bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600 hover:text-white transition font-semibold">Marcar Entregado</button>
+                ` : ''}
+                ${p.estado !== 'ENTREGADO' && p.estado !== 'CANCELADO' ? `
+                  <button onclick="actualizarEstadoPedido('${p.id}', 'CANCELADO')" class="px-2.5 py-1.5 rounded-xl bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white transition font-medium" title="Cancelar Pedido">
+                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Render Tabla
+      tbody.innerHTML = list.map(p => `
+        <tr class="hover:bg-slate-800/40 transition">
+          <td class="p-3 font-bold text-brand-400">${p.id}</td>
+          <td class="p-3">
+            <div class="font-semibold text-white">${p.cliente_nombre}</div>
+            <div class="text-xs text-slate-400">${p.cliente_telefono}</div>
+          </td>
+          <td class="p-3">
+            <div class="text-xs text-slate-200">${p.cliente_direccion}</div>
+            <div class="text-[10px] text-teal-400">${p.sucursal_nombre}</div>
+          </td>
+          <td class="p-3 text-xs text-slate-300 max-w-xs truncate">${p.items_detalle}</td>
+          <td class="p-3">
+            <div class="font-bold text-white">$${parseFloat(p.monto_total || 0).toFixed(2)}</div>
+            <div class="text-[10px] text-slate-400">${p.metodo_pago}</div>
+          </td>
+          <td class="p-3 text-xs font-medium text-slate-200">${p.repartidor_nombre || '<span class="text-slate-500">Sin asignar</span>'}</td>
+          <td class="p-3">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 border border-slate-700 text-slate-200">${p.estado}</span>
+          </td>
+          <td class="p-3 text-right space-x-1">
+            ${p.estado === 'EN_RUTA' ? `<button onclick="actualizarEstadoPedido('${p.id}', 'ENTREGADO')" class="px-2 py-1 rounded-lg bg-emerald-600/30 text-emerald-300 hover:bg-emerald-600 hover:text-white text-xs">Entregado</button>` : ''}
+            ${p.estado === 'ASIGNADO' ? `<button onclick="actualizarEstadoPedido('${p.id}', 'EN_RUTA')" class="px-2 py-1 rounded-lg bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white text-xs">En Ruta</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    async function cambiarRepartidorPedido(pedidoId, nuevoRepId) {
+      if (!nuevoRepId) return;
+      mostrarToast('Asignando repartidor...', 'info');
+      try {
+        const res = await ejecutarLlamadaServidor('assignDriver', { pedidoId: pedidoId, repartidorId: nuevoRepId });
+        if (res && res.success) {
+          const ped = APP_STATE.pedidos.find(p => p.id === pedidoId);
+          const rep = APP_STATE.repartidores.find(r => r.id === nuevoRepId);
+          if (ped && rep) {
+            ped.repartidor_id = rep.id;
+            ped.repartidor_nombre = rep.nombre;
+            ped.estado = 'ASIGNADO';
+            rep.estado = 'EN_RUTA';
+          }
+          calcularDashboardLocal();
+          renderizarTodo();
+          mostrarToast(`Pedido asignado a ${res.repartidor || 'repartidor'}`, 'success');
+        }
+      } catch (e) {
+        mostrarToast('Error al asignar repartidor: ' + e.message, 'error');
+      }
+    }
+
+    async function actualizarEstadoPedido(pedidoId, nuevoEstado) {
+      mostrarToast(`Actualizando a ${nuevoEstado}...`, 'info');
+      try {
+        const res = await ejecutarLlamadaServidor('updateOrderStatus', {
+          pedidoId: pedidoId,
+          nuevoEstado: nuevoEstado,
+          extras: { pago_recibido: true, registrado_por: 'ADMIN' }
+        });
+
+        if (res && res.success) {
+          const ped = APP_STATE.pedidos.find(p => p.id === pedidoId);
+          if (ped) {
+            ped.estado = nuevoEstado;
+            if (nuevoEstado === 'ENTREGADO') {
+              ped.estado_pago = 'PAGADO';
+              // Actualizar balance repartidor localmente
+              if (ped.repartidor_id) {
+                const rep = APP_STATE.repartidores.find(r => r.id === ped.repartidor_id);
+                if (rep) {
+                  rep.balance_comisiones += parseFloat(ped.costo_envio || 3.50);
+                  if ((ped.metodo_pago || '').toLowerCase().includes('efectivo')) {
+                    rep.efectivo_en_mano += parseFloat(ped.monto_total || 0);
+                  }
+                  rep.estado = 'ACTIVO';
+                }
+              }
+            }
+          }
+          calcularDashboardLocal();
+          renderizarTodo();
+          mostrarToast(`Pedido ${pedidoId} marcado como ${nuevoEstado}`, 'success');
+        }
+      } catch (e) {
+        mostrarToast('Error actualizando pedido: ' + e.message, 'error');
+      }
+    }
+
+    // --- MODAL NUEVO PEDIDO ---
+    function abrirModalNuevoPedido() {
+      document.getElementById('modal-nuevo-pedido').classList.remove('hidden');
+      calcularTotalNuevoPedido();
+      lucide.createIcons();
+    }
+
+    function cerrarModalNuevoPedido() {
+      document.getElementById('modal-nuevo-pedido').classList.add('hidden');
+    }
+
+    function calcularTotalNuevoPedido() {
+      const prod = parseFloat(document.getElementById('np-monto-productos').value || 0);
+      const env = parseFloat(document.getElementById('np-costo-envio').value || 0);
+      document.getElementById('np-monto-total').value = `$${(prod + env).toFixed(2)}`;
+    }
+
+    function geocodificarDireccionModal() {
+      // Coordenadas aleatorias cercanas al centro para simulación inmediata o geolocalización
+      const baseLat = parseFloat(APP_STATE.config.LATITUD_CENTRAL || 4.60971);
+      const baseLng = parseFloat(APP_STATE.config.LONGITUD_CENTRAL || -74.08175);
+      const rLat = baseLat + (Math.random() - 0.5) * 0.05;
+      const rLng = baseLng + (Math.random() - 0.5) * 0.05;
+
+      document.getElementById('np-cliente-lat').value = rLat.toFixed(5);
+      document.getElementById('np-cliente-lng').value = rLng.toFixed(5);
+      mostrarToast('Coordenadas GPS aproximadas asignadas', 'info');
+    }
+
+    async function guardarNuevoPedido(event) {
+      event.preventDefault();
+      const selSuc = document.getElementById('np-sucursal');
+      const sucId = selSuc.value;
+      const sucNombre = selSuc.options[selSuc.selectedIndex].getAttribute('data-nombre');
+
+      const selRep = document.getElementById('np-repartidor');
+      const repId = selRep.value;
+      const repNombre = selRep.value ? selRep.options[selRep.selectedIndex].getAttribute('data-nombre') : '';
+
+      const datos = {
+        cliente_nombre: document.getElementById('np-cliente-nombre').value,
+        cliente_telefono: document.getElementById('np-cliente-telefono').value,
+        cliente_direccion: document.getElementById('np-cliente-direccion').value,
+        cliente_lat: document.getElementById('np-cliente-lat').value || APP_STATE.config.LATITUD_CENTRAL,
+        cliente_lng: document.getElementById('np-cliente-lng').value || APP_STATE.config.LONGITUD_CENTRAL,
+        sucursal_id: sucId,
+        sucursal_nombre: sucNombre,
+        repartidor_id: repId,
+        repartidor_nombre: repNombre,
+        items_detalle: document.getElementById('np-items-detalle').value,
+        monto_productos: parseFloat(document.getElementById('np-monto-productos').value || 0),
+        costo_envio: parseFloat(document.getElementById('np-costo-envio').value || 0),
+        metodo_pago: document.getElementById('np-metodo-pago').value,
+        notas_entrega: document.getElementById('np-notas').value
+      };
+
+      mostrarToast('Guardando pedido...', 'info');
+      try {
+        const res = await ejecutarLlamadaServidor('createOrder', datos);
+        if (res && res.success) {
+          APP_STATE.pedidos.unshift(res.pedido || {
+            ...datos,
+            id: 'PED-' + Math.floor(1000 + Math.random() * 9000),
+            fecha_creacion: new Date().toISOString(),
+            monto_total: datos.monto_productos + datos.costo_envio,
+            estado: datos.repartidor_id ? 'ASIGNADO' : 'PENDIENTE'
+          });
+
+          cerrarModalNuevoPedido();
+          document.getElementById('form-nuevo-pedido').reset();
+          calcularDashboardLocal();
+          renderizarTodo();
+          mostrarToast('¡Pedido creado exitosamente!', 'success');
+        }
+      } catch (e) {
+        mostrarToast('Error al crear pedido: ' + e.message, 'error');
+      }
+    }
+
+    // --- MAPA EN VIVO (LEAFLET + OSM) ---
+    function inicializarOMapResize() {
+      const container = document.getElementById('map-container');
+      if (!container) return;
+
+      if (!leafletMap) {
+        const lat = parseFloat(APP_STATE.config.LATITUD_CENTRAL || 4.60971);
+        const lng = parseFloat(APP_STATE.config.LONGITUD_CENTRAL || -74.08175);
+        const zoom = parseInt(APP_STATE.config.ZOOM_MAPA || 13);
+
+        leafletMap = L.map('map-container').setView([lat, lng], zoom);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(leafletMap);
+      } else {
+        leafletMap.invalidateSize();
+      }
+
+      actualizarMarcadoresMapa();
+    }
+
+    function centrarMapa() {
+      if (!leafletMap) return;
+      const lat = parseFloat(APP_STATE.config.LATITUD_CENTRAL || 4.60971);
+      const lng = parseFloat(APP_STATE.config.LONGITUD_CENTRAL || -74.08175);
+      leafletMap.setView([lat, lng], parseInt(APP_STATE.config.ZOOM_MAPA || 13));
+    }
+
+    function actualizarMapa() {
+      if (APP_STATE.adminTab === 'mapa' && leafletMap) {
+        actualizarMarcadoresMapa();
+      }
+    }
+
+    function actualizarMarcadoresMapa() {
+      if (!leafletMap) return;
+
+      // Limpiar marcadores anteriores
+      mapMarkers.sucursales.forEach(m => leafletMap.removeLayer(m));
+      mapMarkers.repartidores.forEach(m => leafletMap.removeLayer(m));
+      mapMarkers.pedidos.forEach(m => leafletMap.removeLayer(m));
+      mapMarkers.sucursales = [];
+      mapMarkers.repartidores = [];
+      mapMarkers.pedidos = [];
+
+      // 1. Marcadores de Sucursales (Rojo / Tienda)
+      APP_STATE.sucursales.forEach(s => {
+        if (s.latitud && s.longitud) {
+          const sucIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div class="w-8 h-8 rounded-full bg-red-600 border-2 border-white flex items-center justify-center text-white shadow-lg"><i data-lucide="store" class="w-4 h-4"></i></div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+          });
+
+          const m = L.marker([s.latitud, s.longitud], { icon: sucIcon }).addTo(leafletMap);
+          m.bindPopup(`
+            <div class="text-xs p-1">
+              <h4 class="font-bold text-sm text-emerald-400">${s.nombre}</h4>
+              <p class="text-slate-300 mt-1">${s.direccion}</p>
+              <p class="text-slate-400 text-[11px]">Tel: ${s.telefono}</p>
+              <p class="text-slate-400 text-[11px]">Encargado: ${s.encargado}</p>
+            </div>
+          `);
+          mapMarkers.sucursales.push(m);
+        }
+      });
+
+      // 2. Marcadores de Repartidores (Verde: Activo, Azul: En Ruta, Gris: Desconectado)
+      const activeDriversList = [];
+      APP_STATE.repartidores.forEach(r => {
+        let isOnline = r.estado !== 'DESCONECTADO';
+        if (isOnline) activeDriversList.push(r);
+
+        if (r.latitud && r.longitud) {
+          let bg = 'bg-emerald-500';
+          if (r.estado === 'EN_RUTA') bg = 'bg-blue-500';
+          else if (r.estado === 'DESCONECTADO') bg = 'bg-slate-500';
+
+          const driverIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div class="w-9 h-9 rounded-2xl ${bg} border-2 border-white flex items-center justify-center text-white shadow-xl ${isOnline ? 'driver-pulse' : ''}"><i data-lucide="bike" class="w-5 h-5"></i></div>`,
+            iconSize: [36, 36],
+            iconAnchor: [18, 18]
+          });
+
+          const m = L.marker([r.latitud, r.longitud], { icon: driverIcon }).addTo(leafletMap);
+          m.bindPopup(`
+            <div class="text-xs p-1">
+              <div class="flex items-center space-x-2">
+                <span class="font-bold text-sm text-white">${r.nombre}</span>
+                <span class="text-[10px] font-bold text-amber-400">★ ${parseFloat(r.calificacion || 5).toFixed(1)}</span>
+              </div>
+              <p class="text-slate-300 mt-0.5">${r.vehiculo} • ${r.placa || ''}</p>
+              <p class="text-emerald-400 font-semibold mt-1">Estado: ${r.estado}</p>
+              <p class="text-slate-400 text-[10px]">Tel: ${r.telefono}</p>
+            </div>
+          `);
+          mapMarkers.repartidores.push(m);
+        }
+      });
+
+      // 3. Marcadores de Pedidos Activos (Destino de entrega)
+      const activeOrdersList = [];
+      APP_STATE.pedidos.forEach(p => {
+        if (p.estado === 'EN_RUTA' || p.estado === 'ASIGNADO') {
+          activeOrdersList.push(p);
+          if (p.cliente_lat && p.cliente_lng) {
+            const orderIcon = L.divIcon({
+              className: 'custom-div-icon',
+              html: `<div class="w-8 h-8 rounded-full bg-amber-500 border-2 border-white flex items-center justify-center text-slate-900 font-bold text-xs shadow-lg"><i data-lucide="package" class="w-4 h-4 text-white"></i></div>`,
+              iconSize: [32, 32],
+              iconAnchor: [16, 16]
+            });
+
+            const m = L.marker([p.cliente_lat, p.cliente_lng], { icon: orderIcon }).addTo(leafletMap);
+            m.bindPopup(`
+              <div class="text-xs p-1">
+                <h4 class="font-bold text-sm text-brand-400">${p.id} - ${p.cliente_nombre}</h4>
+                <p class="text-slate-300 mt-1">${p.cliente_direccion}</p>
+                <p class="text-emerald-400 font-bold mt-1">Total: $${parseFloat(p.monto_total || 0).toFixed(2)}</p>
+                <p class="text-slate-400 text-[11px]">Repartidor: ${p.repartidor_nombre || 'Sin asignar'}</p>
+              </div>
+            `);
+            mapMarkers.pedidos.push(m);
+          }
+        }
+      });
+
+      // Actualizar paneles laterales de lista del mapa
+      document.getElementById('badge-map-drivers-count').textContent = activeDriversList.length;
+      document.getElementById('badge-map-active-orders').textContent = activeOrdersList.length;
+
+      const divDriversList = document.getElementById('map-drivers-list');
+      if (divDriversList) {
+        divDriversList.innerHTML = activeDriversList.length === 0 ? '<p class="text-xs text-slate-500">No hay repartidores conectados</p>' :
+          activeDriversList.map(r => `
+            <div onclick="enfocarEnMapa(${r.latitud}, ${r.longitud})" class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-700/60 flex items-center justify-between cursor-pointer hover:border-brand-500 transition">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full ${r.estado === 'EN_RUTA' ? 'bg-blue-400' : 'bg-emerald-400'}"></span>
+                <div>
+                  <div class="text-xs font-bold text-white">${r.nombre}</div>
+                  <div class="text-[10px] text-slate-400">${r.vehiculo} • ${r.estado}</div>
+                </div>
+              </div>
+              <i data-lucide="crosshair" class="w-3.5 h-3.5 text-slate-400"></i>
+            </div>
+          `).join('');
+      }
+
+      const divOrdersList = document.getElementById('map-orders-list');
+      if (divOrdersList) {
+        divOrdersList.innerHTML = activeOrdersList.length === 0 ? '<p class="text-xs text-slate-500">No hay entregas en camino</p>' :
+          activeOrdersList.map(p => `
+            <div onclick="enfocarEnMapa(${p.cliente_lat || 0}, ${p.cliente_lng || 0})" class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-700/60 flex items-center justify-between cursor-pointer hover:border-brand-500 transition">
+              <div>
+                <div class="text-xs font-bold text-brand-400">${p.id} • ${p.cliente_nombre}</div>
+                <div class="text-[10px] text-slate-300 truncate max-w-[170px]">${p.cliente_direccion}</div>
+                <div class="text-[10px] text-blue-400">${p.repartidor_nombre || 'Sin asignar'}</div>
+              </div>
+              <i data-lucide="navigation" class="w-3.5 h-3.5 text-blue-400"></i>
+            </div>
+          `).join('');
+      }
+
+      lucide.createIcons();
+    }
+
+    function enfocarEnMapa(lat, lng) {
+      if (!leafletMap || !lat || !lng) return;
+      leafletMap.flyTo([lat, lng], 16, { animate: true, duration: 1 });
+    }
+
+    function toggleAutoGPS() {
+      const btn = document.getElementById('btn-toggle-autogps');
+      if (APP_STATE.autoRefreshGpsInterval) {
+        clearInterval(APP_STATE.autoRefreshGpsInterval);
+        APP_STATE.autoRefreshGpsInterval = null;
+        btn.innerHTML = `<i data-lucide="radio" class="w-3.5 h-3.5"></i><span>Auto-Refresh: OFF</span>`;
+        btn.className = 'px-2.5 py-1 rounded-lg bg-slate-700 text-slate-400 flex items-center space-x-1 font-medium';
+      } else {
+        iniciarAutoRefresh();
+        btn.innerHTML = `<i data-lucide="radio" class="w-3.5 h-3.5 animate-spin"></i><span>Auto-Refresh: ON</span>`;
+        btn.className = 'px-2.5 py-1 rounded-lg bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1 font-medium';
+      }
+      lucide.createIcons();
+    }
+
+    function iniciarAutoRefresh() {
+      if (APP_STATE.autoRefreshGpsInterval) clearInterval(APP_STATE.autoRefreshGpsInterval);
+      APP_STATE.autoRefreshGpsInterval = setInterval(() => {
+        // Simular pequeños movimientos GPS para repartidores activos en modo demostración
+        APP_STATE.repartidores.forEach(r => {
+          if (r.estado === 'EN_RUTA' || r.estado === 'ACTIVO') {
+            r.latitud += (Math.random() - 0.5) * 0.0008;
+            r.longitud += (Math.random() - 0.5) * 0.0008;
+          }
+        });
+        if (APP_STATE.adminTab === 'mapa') {
+          actualizarMarcadoresMapa();
+        }
+      }, 15000);
+    }
+
+    // --- FINANZAS & BALANCES ---
+    function renderizarFinanzas() {
+      if (!APP_STATE.dashboardData) return;
+      const k = APP_STATE.dashboardData.kpis;
+
+      document.getElementById('fin-ventas-productos').textContent = `$${(k.totalVentasProductos || 0).toFixed(2)}`;
+      document.getElementById('fin-costos-envio').textContent = `$${(k.totalEnvios || 0).toFixed(2)}`;
+      document.getElementById('fin-efectivo-calle').textContent = `$${(k.totalEfectivoEnCalle || 0).toFixed(2)}`;
+      document.getElementById('fin-comisiones-pendientes').textContent = `$${(k.totalComisionesPendientes || 0).toFixed(2)}`;
+
+      const tbodyRep = document.getElementById('table-finanzas-repartidores');
+      if (tbodyRep) {
+        tbodyRep.innerHTML = APP_STATE.repartidores.map(r => {
+          const com = parseFloat(r.balance_comisiones || 0);
+          const ef = parseFloat(r.efectivo_en_mano || 0);
+          const balanceNeto = com - ef; // Si es negativo, el repartidor debe plata al negocio
+
+          return `
+            <tr class="hover:bg-slate-800/40 transition">
+              <td class="p-3 font-semibold text-white">${r.nombre}</td>
+              <td class="p-3 text-slate-300">${r.vehiculo}</td>
+              <td class="p-3 text-right font-bold text-emerald-400">$${com.toFixed(2)}</td>
+              <td class="p-3 text-right font-bold text-amber-400">$${ef.toFixed(2)}</td>
+              <td class="p-3 text-right font-bold ${balanceNeto >= 0 ? 'text-emerald-300' : 'text-red-400'}">
+                $${balanceNeto.toFixed(2)}
+              </td>
+              <td class="p-3 text-center">
+                <button onclick="abrirModalLiquidar('${r.id}')" class="px-3 py-1 rounded-xl bg-slate-700 hover:bg-emerald-600 text-xs font-medium text-slate-200 hover:text-white transition">
+                  Liquidar
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // Transacciones Ledger
+      const tbodyTx = document.getElementById('table-transacciones-body');
+      if (tbodyTx) {
+        const mockTx = [
+          { id: 'TX-101', fecha: new Date(Date.now() - 3600000).toLocaleString(), rep: 'Juan Martínez', tipo: 'COMISION_GANADA', monto: 3.50, ped: 'PED-1001', desc: 'Comisión entrega', por: 'SISTEMA' },
+          { id: 'TX-102', fecha: new Date(Date.now() - 3600000).toLocaleString(), rep: 'Juan Martínez', tipo: 'EFECTIVO_RECAUDADO', monto: 26.00, ped: 'PED-1001', desc: 'Efectivo recibido', por: 'REP-01' }
+        ];
+
+        tbodyTx.innerHTML = mockTx.map(t => `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="p-2.5 font-mono text-slate-400">${t.id}</td>
+            <td class="p-2.5 text-slate-300">${t.fecha}</td>
+            <td class="p-2.5 font-medium text-white">${t.rep}</td>
+            <td class="p-2.5">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${t.tipo.includes('COMISION') ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">${t.tipo}</span>
+            </td>
+            <td class="p-2.5 text-right font-bold text-white">$${t.monto.toFixed(2)}</td>
+            <td class="p-2.5 text-brand-400 font-mono">${t.ped}</td>
+            <td class="p-2.5 text-slate-400">${t.desc}</td>
+            <td class="p-2.5 text-slate-500">${t.por}</td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    let activeLiquidarDriverId = null;
+    function abrirModalLiquidar(driverId) {
+      activeLiquidarDriverId = driverId;
+      const rep = APP_STATE.repartidores.find(r => r.id === driverId);
+      if (!rep) return;
+
+      document.getElementById('liq-modal-driver-info').textContent = `Repartidor: ${rep.nombre} (${rep.vehiculo}) | Comisiones: $${parseFloat(rep.balance_comisiones||0).toFixed(2)} | Efectivo en mano: $${parseFloat(rep.efectivo_en_mano||0).toFixed(2)}`;
+      document.getElementById('liq-comisiones').value = parseFloat(rep.balance_comisiones || 0);
+      document.getElementById('liq-efectivo').value = parseFloat(rep.efectivo_en_mano || 0);
+      document.getElementById('modal-liquidar-balance').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function cerrarModalLiquidar() {
+      document.getElementById('modal-liquidar-balance').classList.add('hidden');
+    }
+
+    async function confirmarLiquidacionBalance() {
+      const com = parseFloat(document.getElementById('liq-comisiones').value || 0);
+      const ef = parseFloat(document.getElementById('liq-efectivo').value || 0);
+      const notas = document.getElementById('liq-notas').value;
+
+      mostrarToast('Registrando liquidación...', 'info');
+      try {
+        const res = await ejecutarLlamadaServidor('settleDriverBalance', {
+          repartidorId: activeLiquidarDriverId,
+          montoComisiones: com,
+          montoEfectivo: ef,
+          notas: notas
+        });
+
+        if (res && res.success) {
+          const rep = APP_STATE.repartidores.find(r => r.id === activeLiquidarDriverId);
+          if (rep) {
+            rep.balance_comisiones = Math.max(0, (rep.balance_comisiones || 0) - com);
+            rep.efectivo_en_mano = Math.max(0, (rep.efectivo_en_mano || 0) - ef);
+          }
+          cerrarModalLiquidar();
+          calcularDashboardLocal();
+          renderizarTodo();
+          mostrarToast('Liquidación registrada con éxito', 'success');
+        }
+      } catch (e) {
+        mostrarToast('Error en liquidación: ' + e.message, 'error');
+      }
+    }
+
+    function exportarTransaccionesCSV() {
+      let csv = 'ID,Fecha,Repartidor,Tipo,Monto,Pedido,Descripcion,RegistradoPor\n';
+      csv += 'TX-101,' + new Date().toISOString() + ',Juan Martinez,COMISION_GANADA,3.50,PED-1001,Comision,SISTEMA\n';
+      csv += 'TX-102,' + new Date().toISOString() + ',Juan Martinez,EFECTIVO_RECAUDADO,26.00,PED-1001,Efectivo cobrado,REP-01\n';
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', `Reporte_Finanzas_${new Date().toISOString().split('T')[0]}.csv`);
+      a.click();
+      mostrarToast('Archivo CSV descargado', 'success');
+    }
+
+    // --- SUCURSALES & MÉTODOS DE PAGO ---
+    function renderizarSucursales() {
+      const grid = document.getElementById('grid-sucursales');
+      if (!grid) return;
+
+      grid.innerHTML = APP_STATE.sucursales.map(s => `
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 space-y-3 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-white flex items-center space-x-1.5">
+              <i data-lucide="store" class="w-4 h-4 text-emerald-400"></i>
+              <span>${s.nombre}</span>
+            </h4>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${s.activo === 'SI' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'}">
+              ${s.activo === 'SI' ? 'ACTIVA' : 'INACTIVA'}
+            </span>
+          </div>
+          <div class="space-y-1 text-xs text-slate-300">
+            <p class="flex items-center space-x-1.5">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-400"></i>
+              <span>${s.direccion}</span>
+            </p>
+            <p class="flex items-center space-x-1.5">
+              <i data-lucide="phone" class="w-3.5 h-3.5 text-slate-400"></i>
+              <span>${s.telefono || 'Sin teléfono'}</span>
+            </p>
+            <p class="flex items-center space-x-1.5">
+              <i data-lucide="user" class="w-3.5 h-3.5 text-slate-400"></i>
+              <span>Encargado: ${s.encargado || 'No asignado'}</span>
+            </p>
+            <p class="text-[11px] text-teal-400">Radio de cobertura: ${s.radio_cobertura_km || 5} km</p>
+          </div>
+          <div class="pt-2 border-t border-slate-700/60 flex justify-end space-x-2">
+            <button onclick="editarSucursal('${s.id}')" class="px-2.5 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs">Editar</button>
+          </div>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function abrirModalSucursal() {
+      document.getElementById('form-sucursal').reset();
+      document.getElementById('suc-id').value = '';
+      document.getElementById('modal-sucursal-title').textContent = 'Nueva Sucursal';
+      document.getElementById('modal-sucursal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function editarSucursal(id) {
+      const s = APP_STATE.sucursales.find(x => x.id === id);
+      if (!s) return;
+
+      document.getElementById('suc-id').value = s.id;
+      document.getElementById('suc-nombre').value = s.nombre;
+      document.getElementById('suc-direccion').value = s.direccion;
+      document.getElementById('suc-telefono').value = s.telefono;
+      document.getElementById('suc-encargado').value = s.encargado;
+      document.getElementById('suc-lat').value = s.latitud;
+      document.getElementById('suc-lng').value = s.longitud;
+      document.getElementById('suc-radio').value = s.radio_cobertura_km;
+      document.getElementById('modal-sucursal-title').textContent = 'Editar Sucursal';
+      document.getElementById('modal-sucursal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function cerrarModalSucursal() {
+      document.getElementById('modal-sucursal').classList.add('hidden');
+    }
+
+    async function guardarDatosSucursal(event) {
+      event.preventDefault();
+      const id = document.getElementById('suc-id').value;
+      const datos = {
+        id: id || undefined,
+        nombre: document.getElementById('suc-nombre').value,
+        direccion: document.getElementById('suc-direccion').value,
+        telefono: document.getElementById('suc-telefono').value,
+        encargado: document.getElementById('suc-encargado').value,
+        latitud: parseFloat(document.getElementById('suc-lat').value || APP_STATE.config.LATITUD_CENTRAL),
+        longitud: parseFloat(document.getElementById('suc-lng').value || APP_STATE.config.LONGITUD_CENTRAL),
+        radio_cobertura_km: parseFloat(document.getElementById('suc-radio').value || 5),
+        activo: 'SI'
+      };
+
+      mostrarToast('Guardando sucursal...', 'info');
+      try {
+        const res = await ejecutarLlamadaServidor('saveBranch', datos);
+        if (res && res.success) {
+          if (id) {
+            const idx = APP_STATE.sucursales.findIndex(x => x.id === id);
+            if (idx !== -1) APP_STATE.sucursales[idx] = { ...APP_STATE.sucursales[idx], ...datos };
+          } else {
+            APP_STATE.sucursales.push({ ...datos, id: res.id || 'SUC-0' + (APP_STATE.sucursales.length + 1) });
+          }
+          cerrarModalSucursal();
+          poblarSelects();
+          renderizarSucursales();
+          actualizarMapa();
+          mostrarToast('Sucursal guardada correctamente', 'success');
+        }
+      } catch (e) {
+        mostrarToast('Error al guardar sucursal: ' + e.message, 'error');
+      }
+    }
+
+    function renderizarMetodosPago() {
+      const grid = document.getElementById('grid-metodos-pago');
+      if (!grid) return;
+
+      grid.innerHTML = APP_STATE.metodosPago.map(m => `
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${m.tipo === 'EFECTIVO' ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'}">${m.tipo}</span>
+            <span class="text-xs text-slate-400 font-mono">${m.id}</span>
+          </div>
+          <h4 class="font-bold text-sm text-white">${m.nombre}</h4>
+          <p class="text-xs text-slate-400">${m.instrucciones || 'Sin instrucciones adicionales'}</p>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function abrirModalMetodoPago() {
+      document.getElementById('form-metodo-pago').reset();
+      document.getElementById('modal-metodo-pago').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function cerrarModalMetodoPago() {
+      document.getElementById('modal-metodo-pago').classList.add('hidden');
+    }
+
+    async function guardarDatosMetodoPago(event) {
+      event.preventDefault();
+      const datos = {
+        nombre: document.getElementById('mp-nombre').value,
+        tipo: document.getElementById('mp-tipo').value,
+        instrucciones: document.getElementById('mp-instrucciones').value,
+        activo: 'SI'
+      };
+
+      mostrarToast('Guardando método de pago...', 'info');
+      try {
+        const res = await ejecutarLlamadaServidor('savePaymentMethod', datos);
+        if (res && res.success) {
+          APP_STATE.metodosPago.push({ ...datos, id: res.id || 'MP-0' + (APP_STATE.metodosPago.length + 1) });
+          cerrarModalMetodoPago();
+          poblarSelects();
+          renderizarMetodosPago();
+          mostrarToast('Método de pago guardado', 'success');
+        }
+      } catch (e) {
+        mostrarToast('Error al guardar método: ' + e.message, 'error');
+      }
+    }
+
+    // --- PANEL DEL REPARTIDOR (DRIVER MOBILE PORTAL) ---
+    function iniciarSesionRepartidor() {
+      const sel = document.getElementById('select-driver-login');
+      const driverId = sel.value;
+      if (!driverId) {
+        mostrarToast('Selecciona un repartidor de la lista', 'warning');
+        return;
+      }
+      seleccionarRepartidorPorId(driverId);
+    }
+
+    function seleccionarRepartidorPorId(driverId) {
+      const rep = APP_STATE.repartidores.find(r => r.id === driverId);
+      if (!rep) return;
+
+      APP_STATE.activeDriver = rep;
+      localStorage.setItem('DELIVERY_DRIVER_ID', rep.id);
+
+      document.getElementById('driver-login-box').classList.add('hidden');
+      document.getElementById('driver-active-panel').classList.remove('hidden');
+
+      renderizarPanelRepartidor();
+      iniciarTransmisionGpsRepartidor();
+      mostrarToast(`¡Bienvenido ${rep.nombre}!`, 'success');
+    }
+
+    function cerrarSesionRepartidor() {
+      detenerTransmisionGpsRepartidor();
+      APP_STATE.activeDriver = null;
+      localStorage.removeItem('DELIVERY_DRIVER_ID');
+      document.getElementById('driver-login-box').classList.remove('hidden');
+      document.getElementById('driver-active-panel').classList.add('hidden');
+      mostrarToast('Sesión de repartidor cerrada', 'info');
+    }
+
+    function renderizarPanelRepartidor() {
+      const r = APP_STATE.activeDriver;
+      if (!r) return;
+
+      document.getElementById('driver-name').textContent = r.nombre;
+      document.getElementById('driver-vehicle').innerHTML = `
+        <i data-lucide="bike" class="w-3.5 h-3.5 text-brand-400"></i>
+        <span>${r.vehiculo} • ${r.placa || ''}</span>
+      `;
+      document.getElementById('driver-rating').textContent = (r.calificacion || 5.0).toFixed(1);
+      document.getElementById('driver-avatar').src = r.foto_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+
+      document.getElementById('driver-stat-balance').textContent = `$${parseFloat(r.balance_comisiones || 0).toFixed(2)}`;
+      document.getElementById('driver-stat-cash').textContent = `$${parseFloat(r.efectivo_en_mano || 0).toFixed(2)}`;
+
+      const btnStatus = document.getElementById('btn-driver-online-status');
+      if (r.estado === 'DESCONECTADO') {
+        btnStatus.textContent = '🔴 DESCONECTADO';
+        btnStatus.className = 'px-3 py-1.5 rounded-xl bg-slate-700 text-slate-300 text-xs font-bold';
+      } else {
+        btnStatus.textContent = '🟢 DISPONIBLE';
+        btnStatus.className = 'px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow';
+      }
+
+      // Pedidos del repartidor
+      const pedidosRep = APP_STATE.pedidos.filter(p => p.repartidor_id === r.id);
+      const activos = pedidosRep.filter(p => p.estado === 'ASIGNADO' || p.estado === 'EN_RUTA' || p.estado === 'EN_PREPARACION');
+      const historial = pedidosRep.filter(p => p.estado === 'ENTREGADO');
+
+      document.getElementById('driver-activos-count').textContent = activos.length;
+
+      // Render activos
+      const divActivos = document.getElementById('driver-orders-list');
+      if (activos.length === 0) {
+        divActivos.innerHTML = `
+          <div class="p-8 text-center text-slate-400 bg-slate-800/60 rounded-3xl border border-dashed border-slate-700">
+            <i data-lucide="check-circle-2" class="w-10 h-10 mx-auto text-emerald-400 mb-2"></i>
+            <h4 class="font-bold text-white text-sm">No tienes entregas activas</h4>
+            <p class="text-xs text-slate-400 mt-1">Los pedidos asignados aparecerán aquí en tiempo real</p>
+          </div>
+        `;
+      } else {
+        divActivos.innerHTML = activos.map(p => {
+          const telNum = (p.cliente_telefono || '').replace(/\D/g, '');
+          const waLink = `https://wa.me/${telNum}?text=${encodeURIComponent('Hola ' + p.cliente_nombre + ', voy en camino con tu pedido ' + p.id)}`;
+          const mapRouteLink = `https://www.google.com/maps/dir/?api=1&destination=${p.cliente_lat || 4.60971},${p.cliente_lng || -74.08175}`;
+
+          const esEfectivo = (p.metodo_pago || '').toLowerCase().includes('efectivo');
+
+          return `
+            <div class="bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-brand-500/60 rounded-3xl p-5 space-y-4 shadow-2xl">
+              <div class="flex items-center justify-between pb-3 border-b border-slate-700/60">
+                <span class="font-extrabold text-brand-400 text-sm">${p.id}</span>
+                <span class="px-3 py-1 rounded-full text-xs font-bold ${p.estado === 'EN_RUTA' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}">
+                  ${p.estado}
+                </span>
+              </div>
+
+              <!-- Puntos de Recogida y Destino -->
+              <div class="space-y-3">
+                <div class="flex items-start space-x-3">
+                  <div class="w-7 h-7 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="store" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <span class="text-[10px] text-slate-400 uppercase font-semibold">Recoger en:</span>
+                    <h5 class="font-bold text-xs text-white">${p.sucursal_nombre}</h5>
+                  </div>
+                </div>
+
+                <div class="flex items-start space-x-3">
+                  <div class="w-7 h-7 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <i data-lucide="map-pin" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <span class="text-[10px] text-slate-400 uppercase font-semibold">Entregar a cliente:</span>
+                    <h5 class="font-bold text-xs text-white">${p.cliente_nombre}</h5>
+                    <p class="text-xs text-slate-300 mt-0.5">${p.cliente_direccion}</p>
+                    ${p.notas_entrega ? `<p class="text-[11px] text-amber-400 mt-1 italic font-medium">Nota: ${p.notas_entrega}</p>` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Cobro y Pago -->
+              <div class="p-3 rounded-2xl ${esEfectivo ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-slate-900 border border-slate-800'} flex items-center justify-between">
+                <div>
+                  <span class="text-[11px] text-slate-400">${esEfectivo ? '⚠️ Cobrar en Efectivo:' : 'Pago Confirmado:'}</span>
+                  <div class="font-extrabold text-base text-white">$${parseFloat(p.monto_total || 0).toFixed(2)}</div>
+                </div>
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-lg ${esEfectivo ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}">
+                  ${p.metodo_pago}
+                </span>
+              </div>
+
+              <!-- Botones de Contacto y Navegación GPS -->
+              <div class="grid grid-cols-2 gap-2">
+                <a href="${waLink}" target="_blank" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center space-x-1.5 shadow">
+                  <i data-lucide="message-circle" class="w-4 h-4"></i>
+                  <span>WhatsApp</span>
+                </a>
+                <a href="${mapRouteLink}" target="_blank" class="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center space-x-1.5 shadow">
+                  <i data-lucide="navigation" class="w-4 h-4"></i>
+                  <span>Navegar GPS</span>
+                </a>
+              </div>
+
+              <!-- Botones de Progreso del Repartidor -->
+              <div class="pt-2 border-t border-slate-700/60">
+                ${p.estado === 'ASIGNADO' ? `
+                  <button onclick="repartidorAvanzarEstado('${p.id}', 'EN_RUTA')" class="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white font-bold text-xs shadow-lg flex items-center justify-center space-x-2">
+                    <i data-lucide="truck" class="w-4 h-4"></i>
+                    <span>¡Voy en Camino al Cliente!</span>
+                  </button>
+                ` : `
+                  <button onclick="repartidorAvanzarEstado('${p.id}', 'ENTREGADO')" class="w-full py-3 rounded-xl bg-gradient-to-r from-brand-600 to-emerald-600 hover:from-brand-500 text-white font-bold text-xs shadow-lg shadow-brand-500/25 flex items-center justify-center space-x-2">
+                    <i data-lucide="check-circle" class="w-4 h-4"></i>
+                    <span>✅ Confirmar Entrega Realizada</span>
+                  </button>
+                `}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Render historial
+      const divHistorial = document.getElementById('driver-history-list');
+      if (historial.length === 0) {
+        divHistorial.innerHTML = `<p class="p-6 text-center text-slate-500 text-xs">Aún no tienes entregas completadas hoy</p>`;
+      } else {
+        divHistorial.innerHTML = historial.map(p => `
+          <div class="bg-slate-800/60 border border-slate-700/60 rounded-2xl p-4 flex items-center justify-between">
+            <div>
+              <span class="font-bold text-xs text-brand-400">${p.id}</span>
+              <h5 class="font-semibold text-xs text-white">${p.cliente_nombre}</h5>
+              <p class="text-[11px] text-slate-400">${p.cliente_direccion}</p>
+            </div>
+            <div class="text-right">
+              <span class="text-xs font-bold text-emerald-400">+$${parseFloat(p.costo_envio || 3.50).toFixed(2)} ganancia</span>
+              <div class="text-[10px] text-slate-500">${p.metodo_pago}</div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      lucide.createIcons();
+    }
+
+    function cambiarDriverTab(tab) {
+      APP_STATE.driverTab = tab;
+      const btnA = document.getElementById('dtab-btn-activos');
+      const btnH = document.getElementById('dtab-btn-historial');
+      const secA = document.getElementById('driver-sec-activos');
+      const secH = document.getElementById('driver-sec-historial');
+
+      if (tab === 'activos') {
+        btnA.className = 'flex-1 py-2 rounded-xl text-xs font-bold text-center bg-brand-600 text-white shadow';
+        btnH.className = 'flex-1 py-2 rounded-xl text-xs font-semibold text-center text-slate-400 hover:text-white hover:bg-slate-800';
+        secA.classList.remove('hidden');
+        secH.classList.add('hidden');
+      } else {
+        btnH.className = 'flex-1 py-2 rounded-xl text-xs font-bold text-center bg-brand-600 text-white shadow';
+        btnA.className = 'flex-1 py-2 rounded-xl text-xs font-semibold text-center text-slate-400 hover:text-white hover:bg-slate-800';
+        secH.classList.remove('hidden');
+        secA.classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    async function repartidorAvanzarEstado(pedidoId, nuevoEstado) {
+      mostrarToast(`Actualizando estado a ${nuevoEstado}...`, 'info');
+      try {
+        const res = await ejecutarLlamadaServidor('updateOrderStatus', {
+          pedidoId: pedidoId,
+          nuevoEstado: nuevoEstado,
+          extras: { pago_recibido: true, registrado_por: APP_STATE.activeDriver.id }
+        });
+
+        if (res && res.success) {
+          const ped = APP_STATE.pedidos.find(p => p.id === pedidoId);
+          if (ped) {
+            ped.estado = nuevoEstado;
+            if (nuevoEstado === 'ENTREGADO') {
+              APP_STATE.activeDriver.balance_comisiones += parseFloat(ped.costo_envio || 3.50);
+              if ((ped.metodo_pago || '').toLowerCase().includes('efectivo')) {
+                APP_STATE.activeDriver.efectivo_en_mano += parseFloat(ped.monto_total || 0);
+              }
+              APP_STATE.activeDriver.estado = 'ACTIVO';
+            } else if (nuevoEstado === 'EN_RUTA') {
+              APP_STATE.activeDriver.estado = 'EN_RUTA';
+            }
+          }
+          calcularDashboardLocal();
+          renderizarTodo();
+          mostrarToast(`¡Entrega ${pedidoId} actualizada a ${nuevoEstado}!`, 'success');
+        }
+      } catch (e) {
+        mostrarToast('Error actualizando pedido: ' + e.message, 'error');
+      }
+    }
+
+    // --- TRANSMISIÓN GPS EN TIEMPO REAL DEL REPARTIDOR ---
+    function iniciarTransmisionGpsRepartidor() {
+      if (!('geolocation' in navigator)) {
+        console.warn('Geolocalización no soportada');
+        return;
+      }
+
+      if (APP_STATE.driverGpsWatcherId) {
+        navigator.geolocation.clearWatch(APP_STATE.driverGpsWatcherId);
+      }
+
+      APP_STATE.driverGpsWatcherId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          if (APP_STATE.activeDriver) {
+            APP_STATE.activeDriver.latitud = lat;
+            APP_STATE.activeDriver.longitud = lng;
+            // Enviar al servidor
+            ejecutarLlamadaServidor('updateDriverLocation', {
+              repartidorId: APP_STATE.activeDriver.id,
+              lat: lat,
+              lng: lng
+            }).catch(() => {});
+          }
+        },
+        (err) => {
+          console.log('GPS aviso:', err.message);
+        },
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+      );
+    }
+
+    function detenerTransmisionGpsRepartidor() {
+      if (APP_STATE.driverGpsWatcherId) {
+        navigator.geolocation.clearWatch(APP_STATE.driverGpsWatcherId);
+        APP_STATE.driverGpsWatcherId = null;
+      }
+    }
+
+    function toggleDriverGpsTracking() {
+      const label = document.getElementById('label-driver-gps');
+      const btn = document.getElementById('btn-toggle-driver-gps');
+
+      if (APP_STATE.driverGpsWatcherId) {
+        detenerTransmisionGpsRepartidor();
+        label.textContent = 'GPS Pausado';
+        btn.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-700 text-slate-400 border border-slate-600 text-xs font-semibold';
+        mostrarToast('Transmisión GPS pausada', 'info');
+      } else {
+        iniciarTransmisionGpsRepartidor();
+        label.textContent = 'GPS Activo (Transmitiendo)';
+        btn.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold';
+        mostrarToast('Transmisión GPS activada', 'success');
+      }
+      lucide.createIcons();
+    }
+
+    function toggleDriverOnlineStatus() {
+      if (!APP_STATE.activeDriver) return;
+      const nuevoEstado = APP_STATE.activeDriver.estado === 'DESCONECTADO' ? 'ACTIVO' : 'DESCONECTADO';
+      APP_STATE.activeDriver.estado = nuevoEstado;
+      ejecutarLlamadaServidor('saveDriver', { id: APP_STATE.activeDriver.id, estado: nuevoEstado });
+      renderizarPanelRepartidor();
+      actualizarMapa();
+      mostrarToast(`Tu estado ahora es: ${nuevoEstado}`, 'info');
+    }
+
+    // --- RECARGA DE DATOS ---
+    async function recargarDatos() {
+      const icon = document.getElementById('refresh-icon');
+      if (icon) icon.classList.add('animate-spin');
+      mostrarToast('Actualizando datos...', 'info');
+
+      try {
+        const data = await ejecutarLlamadaServidor('getInitialData');
+        if (data && data.success) {
+          APP_STATE.pedidos = data.pedidos || APP_STATE.pedidos;
+          APP_STATE.repartidores = data.repartidores || APP_STATE.repartidores;
+          APP_STATE.sucursales = data.sucursales || APP_STATE.sucursales;
+          APP_STATE.dashboardData = data.dashboard || APP_STATE.dashboardData;
+          renderizarTodo();
+          mostrarToast('Datos actualizados', 'success');
+        } else {
+          calcularDashboardLocal();
+          renderizarTodo();
+        }
+      } catch (e) {
+        calcularDashboardLocal();
+        renderizarTodo();
+      } finally {
+        if (icon) icon.classList.remove('animate-spin');
+      }
+    }
+
+    // --- TOAST NOTIFICATIONS HELPER ---
+    function mostrarToast(mensaje, tipo = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      let bg = 'bg-slate-800 text-slate-100 border-slate-700';
+      let icon = 'info';
+
+      if (tipo === 'success') {
+        bg = 'bg-emerald-950 text-emerald-200 border-emerald-700/80';
+        icon = 'check-circle';
+      } else if (tipo === 'error') {
+        bg = 'bg-red-950 text-red-200 border-red-700/80';
+        icon = 'alert-triangle';
+      } else if (tipo === 'warning') {
+        bg = 'bg-amber-950 text-amber-200 border-amber-700/80';
+        icon = 'alert-circle';
+      }
+
+      toast.className = `p-3 rounded-2xl border shadow-xl flex items-center space-x-2 text-xs font-semibold backdrop-blur-md transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto ${bg}`;
+      toast.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 shrink-0"></i><span>${mensaje}</span>`;
+
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      }, 20);
+
+      setTimeout(() => {
+        toast.classList.add('translate-y-2', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+  </script>
+</body>
+</html>
